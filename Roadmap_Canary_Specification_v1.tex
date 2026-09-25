@@ -1,0 +1,1574 @@
+\documentclass[12pt]{article}
+
+\usepackage[a4paper,margin=0.72in]{geometry}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{mdframed}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{titlesec}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=navy,
+    urlcolor=blue,
+    citecolor=navy,
+    pdftitle={Roadmap Canary - Product and Technical Design Specification},
+    pdfsubject={IBM Bob 2.0 Hackathon Project Specification}
+}
+
+\definecolor{navy}{HTML}{17324D}
+\definecolor{blue}{HTML}{1769AA}
+\definecolor{lightblue}{HTML}{EAF4FC}
+\definecolor{lightgray}{HTML}{F4F6F8}
+\definecolor{linegray}{HTML}{CCD6E0}
+\definecolor{darkgray}{HTML}{4A5A6A}
+\definecolor{green}{HTML}{26734D}
+\definecolor{amber}{HTML}{A35D00}
+\definecolor{red}{HTML}{A61B1B}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Roadmap Canary}
+\rhead{\small IBM Bob 2.0 Hackathon}
+\cfoot{\small Page \thepage\ of \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14.5pt}
+
+\titleformat{\section}
+  {\Large\bfseries\color{navy}}
+  {\thesection.}{0.55em}{}
+\titleformat{\subsection}
+  {\large\bfseries\color{navy}}
+  {\thesubsection.}{0.55em}{}
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{navy}}
+  {\thesubsubsection.}{0.55em}{}
+
+\setlist[itemize]{leftmargin=1.45em,itemsep=3pt,topsep=4pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=3pt,topsep=4pt}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{lightgray},
+    frame=single,
+    rulecolor=\color{linegray},
+    breaklines=true,
+    showstringspaces=false,
+    columns=fullflexible,
+    xleftmargin=0.35em,
+    xrightmargin=0.35em,
+    aboveskip=6pt,
+    belowskip=8pt,
+    keepspaces=true
+}
+
+\newmdenv[
+    backgroundcolor=lightblue,
+    linecolor=blue,
+    linewidth=1pt,
+    roundcorner=4pt,
+    innerleftmargin=10pt,
+    innerrightmargin=10pt,
+    innertopmargin=8pt,
+    innerbottommargin=8pt
+]{pitchbox}
+
+\newmdenv[
+    backgroundcolor=lightgray,
+    linecolor=linegray,
+    linewidth=0.8pt,
+    roundcorner=3pt,
+    innerleftmargin=9pt,
+    innerrightmargin=9pt,
+    innertopmargin=7pt,
+    innerbottommargin=7pt
+]{notebox}
+
+\newcommand{\statussafe}{\textbf{\color{green}SAFE}}
+\newcommand{\statuschanged}{\textbf{\color{amber}PATH CHANGED}}
+\newcommand{\statusrisk}{\textbf{\color{red}ROADMAP RISK}}
+
+\begin{document}
+
+\begin{center}
+    {\Huge\bfseries\color{navy} Roadmap Canary}\\[5pt]
+    {\Large\bfseries\color{blue} Regression Testing for Software You Haven't Built Yet}\\[10pt]
+    {\large Product Concept, Technical Architecture, and Implementation Specification}
+\end{center}
+
+\vspace{8pt}
+
+\begin{pitchbox}
+\textbf{One-line concept:}
+Roadmap Canary creates executable proofs for accepted future capabilities and continuously checks whether each new pull request preserves at least one viable path to them.
+\end{pitchbox}
+
+\begin{pitchbox}
+\textbf{Core message:}
+Traditional CI asks whether today's software still works. Roadmap Canary asks whether tomorrow's already-accepted software can still be built.
+\end{pitchbox}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Executive Summary}
+
+Engineering teams continuously protect existing behavior with tests, CI, static analysis, and deployment checks. These systems are good at answering one question:
+
+\begin{quote}
+\textit{Did this change break something that already exists?}
+\end{quote}
+
+They do not protect architectural options that the team has already committed to but has not implemented yet.
+
+A product team may already know that next quarter it needs multi-tenancy, multiple payment providers, enterprise SSO, offline mode, plugin support, regional data residency, or another major capability. A refactor today may leave every current test green while quietly removing the clean implementation path that made one of those roadmap items feasible.
+
+Roadmap Canary turns selected accepted future capabilities into \textbf{executable viability witnesses}. For each architecture-sensitive roadmap item, IBM Bob creates a small disposable implementation called a \textbf{Minimum Viable Proof}. This proof is never shipped and is never merged into production. It exists only to demonstrate that the current architecture can satisfy a clearly defined \textbf{Future Contract}.
+
+When a new pull request arrives, Roadmap Canary replays only the relevant canaries against both the base branch and the PR branch. If the old witness fails on the PR branch, that alone is not considered a roadmap regression. The architecture may simply have evolved. Bob therefore performs a bounded \textbf{Rescue} attempt to find a new minimal proof satisfying the same Future Contract.
+
+The result is evidence-based:
+
+\begin{itemize}
+    \item old witness still works $\rightarrow$ \statussafe,
+    \item old witness breaks but a replacement proof works $\rightarrow$ \statuschanged\ but safe,
+    \item old witness worked on base, fails on PR, and Rescue cannot re-establish the contract $\rightarrow$ \statusrisk.
+\end{itemize}
+
+Roadmap Canary therefore does not freeze an implementation. It preserves \textbf{architectural optionality}.
+
+% ============================================================
+\section{The Problem}
+
+\subsection{What Traditional CI Protects}
+
+Normal regression testing protects implemented behavior. If login already exists, a test can verify that login still works. If an API already returns a response schema, a contract test can verify that the schema is preserved. If a performance requirement already exists, a benchmark can detect a regression.
+
+This works because the expected capability already exists in executable form.
+
+However, teams also make decisions about the future. A roadmap issue may be accepted months before implementation begins. During those months, unrelated refactors and infrastructure changes can reshape the architecture.
+
+By the time the team finally starts the roadmap feature, it may discover:
+
+\begin{quote}
+``We can still build this, but first we need a six-week architectural refactor.''
+\end{quote}
+
+The cost was introduced earlier, often by a change that looked harmless at the time.
+
+\subsection{Example: Multiple Payment Providers}
+
+Assume the accepted roadmap contains:
+
+\begin{quote}
+\textbf{Roadmap Item \#41: Support multiple interchangeable payment providers.}
+\end{quote}
+
+The current system has a provider abstraction:
+
+\begin{lstlisting}
+PaymentService
+     |
+     v
+PaymentProvider
+     |
+     +-- StripeProvider
+\end{lstlisting}
+
+A small speculative proof demonstrates that a second provider can be added without changing checkout business logic:
+
+\begin{lstlisting}
+PaymentService
+     |
+     v
+PaymentProvider
+     |
+     +-- StripeProvider
+     +-- PayPalCanaryProvider
+\end{lstlisting}
+
+Months later, another PR ``simplifies'' the payment stack:
+
+\begin{lstlisting}
+Checkout ------> StripeClient
+RefundService -> StripeRefundId
+PaymentService -> StripeClient
+\end{lstlisting}
+
+All existing tests can still pass because Stripe is still the only production provider.
+
+\begin{lstlisting}
+Unit tests:        PASS
+Integration tests: PASS
+Normal CI:         GREEN
+\end{lstlisting}
+
+But the roadmap option may have become substantially worse.
+
+Traditional CI has no artifact representing the future capability, so it has nothing to regress against.
+
+\subsection{The Missing Engineering Primitive}
+
+A normal regression test represents an implemented capability:
+
+\begin{quote}
+\textit{This exists. Keep it working.}
+\end{quote}
+
+Roadmap Canary introduces a different artifact:
+
+\begin{quote}
+\textbf{This does not exist in production yet, but we have already demonstrated at least one viable implementation path. Keep at least one viable path available.}
+\end{quote}
+
+That is the gap the project addresses.
+
+% ============================================================
+\section{What Roadmap Canary Is - and Is Not}
+
+\subsection{Roadmap Canary Is}
+
+\begin{itemize}
+    \item A mechanism for selected \textbf{accepted future capabilities}.
+    \item A persistent \textbf{executable feasibility witness}.
+    \item A way to detect when a PR invalidates a previously demonstrated future path.
+    \item A Rescue mechanism that checks whether the capability remains feasible through another small path.
+    \item A deterministic CI signal backed by builds, tests, contracts, and concrete code artifacts.
+\end{itemize}
+
+\subsection{Roadmap Canary Is Not}
+
+\begin{itemize}
+    \item It is \textbf{not} production implementation of future roadmap items.
+    \item It is \textbf{not} a generic architecture score.
+    \item It is \textbf{not} an LLM saying ``this PR feels risky.''
+    \item It is \textbf{not} a requirement to preserve one speculative architecture forever.
+    \item It is \textbf{not} intended for every backlog item.
+    \item It is \textbf{not} proof that a future feature is mathematically impossible when Rescue fails.
+\end{itemize}
+
+\begin{notebox}
+\textbf{Important interpretation:}
+A failed Rescue does \textbf{not} prove that the future capability is impossible. It means only that the system could not re-establish a valid executable witness within the configured Rescue budget. The correct operational result is \statusrisk: the previously demonstrated viability has been lost and no replacement viability proof was found within the bounded search.
+\end{notebox}
+
+% ============================================================
+\section{Core Concepts and Artifacts}
+
+\subsection{Future Contract}
+
+A roadmap issue title is too vague to verify directly. ``Add enterprise SSO'' or ``support multiple payment providers'' leaves too much room for interpretation.
+
+Each canary therefore begins with a \textbf{Future Contract}: a compact, reviewable definition of what the capability must prove and what shortcuts are forbidden.
+
+Example:
+
+\begin{lstlisting}
+feature: multiple-payment-providers
+roadmap_issue: 41
+
+commitment:
+  state: committed
+  target: Q4
+  expires: 2026-12-31
+  blocking_policy: advisory
+
+must_prove:
+  - at least two interchangeable providers can be registered
+  - existing Stripe behavior remains unchanged
+  - checkout business logic is provider-agnostic
+  - both providers execute through the real payment path
+  - both providers satisfy the existing provider contract tests
+
+must_not:
+  - replace the current checkout flow
+  - hardcode provider type inside checkout
+  - modify unrelated business modules
+  - replace production components with mocks
+  - modify or weaken approved acceptance tests
+
+evidence:
+  - existing checkout integration test
+  - shared provider contract test
+  - dependency rule: Checkout must not import Stripe types
+
+protected_surfaces:
+  paths:
+    - payment/**
+    - checkout/**
+  symbols:
+    - PaymentService
+    - PaymentProvider
+  infrastructure:
+    - dependency-injection
+
+proof_budget:
+  max_files_changed: 8
+  max_added_loc: 180
+  max_new_dependencies: 1
+\end{lstlisting}
+
+Bob may draft the contract from the roadmap issue, RFC, and repository context, but a human must approve or edit it before the canary becomes authoritative. Human approval is a deliberate trust boundary: the team defines what future capability matters; Bob continuously maintains executable evidence for it.
+
+\subsection{Proof Fidelity}
+
+A canary is useful only if it demonstrates the future capability through meaningful production structure rather than gaming a weak contract.
+
+For example, this is not sufficient:
+
+\begin{lstlisting}
+Future requirement: enterprise multi-tenancy
+
+Weak proof:
+  + TenantId field
+  + Fake tenant
+  + tiny isolated test
+
+Result: PASS
+\end{lstlisting}
+
+The proof may compile while saying very little about whether the real application can become tenant-aware.
+
+Roadmap Canary therefore treats \textbf{Proof Fidelity} as part of the Future Contract. Fidelity is not an AI-generated score. It is a set of independently verifiable evidence requirements.
+
+Typical fidelity requirements include:
+
+\begin{itemize}
+    \item the witness must exercise specified real production paths,
+    \item existing integration or contract tests must still pass,
+    \item approved acceptance tests cannot be modified or weakened,
+    \item production components cannot be replaced by mocks unless the contract explicitly permits it,
+    \item dependency or architecture constraints must hold,
+    \item unrelated modules cannot be changed merely to make the proof pass.
+\end{itemize}
+
+The intended pattern is:
+
+\begin{lstlisting}
+Bob generates candidate witness
+        |
+        v
+Repository/toolchain verifies:
+  - build
+  - existing tests
+  - future contract
+  - fidelity evidence
+  - proof budget
+        |
+        v
+Witness accepted or rejected
+\end{lstlisting}
+
+This prevents the product from becoming ``Bob generated something that compiles.'' A valid canary must satisfy the future capability through the production paths and independent evidence the team has approved.
+
+\subsection{Minimum Viable Proof}
+
+The \textbf{Minimum Viable Proof} (MVPf) is the smallest disposable implementation that satisfies the Future Contract.
+
+It is deliberately not a full future feature.
+
+For the multiple-provider example, the proof may require only:
+
+\begin{itemize}
+    \item a provider interface or adapter point,
+    \item a fake or sandbox second provider,
+    \item one small wiring change,
+    \item a shared contract test.
+\end{itemize}
+
+The objective is not to find the best production design. The objective is to find the smallest convincing executable evidence that the architecture can still support the capability.
+
+If Bob finds several viable proofs, Roadmap Canary should keep one \textbf{canonical current witness}, preferably the smallest valid witness under a deterministic proof-cost tuple such as:
+
+\begin{lstlisting}
+(files_changed,
+ added_loc,
+ dependencies_added,
+ schema_changes,
+ public_api_changes)
+\end{lstlisting}
+
+This is only a minimization heuristic. It does not claim that the chosen proof is the optimal production architecture.
+
+\subsection{Roadmap Canary}
+
+The stored canary consists of:
+
+\begin{itemize}
+    \item human-approved Future Contract,
+    \item current verified Minimum Viable Proof,
+    \item Proof Fidelity requirements and evidence,
+    \item protected surfaces used for conservative relevance selection,
+    \item commitment / target / expiry / blocking-policy metadata,
+    \item acceptance and contract tests,
+    \item baseline commit hash,
+    \item roadmap/spec hash,
+    \item contract hash,
+    \item toolchain/environment metadata,
+    \item verification evidence.
+\end{itemize}
+
+The current viable path may be the original proof or a later alternate proof discovered during Rescue.
+
+\textbf{The path is stored only as canary proof. It is not merged into production.}
+
+\subsection{Rescue}
+
+A canary failure means only that the old path stopped working. It does not prove the future capability is lost.
+
+Rescue gives Bob the same Future Contract and the PR branch and asks for a new minimal proof.
+
+Rescue must be bounded. For an MVP implementation, suitable limits include:
+
+\begin{itemize}
+    \item one or two candidate attempts,
+    \item a wall-clock timeout,
+    \item maximum changed files / LOC,
+    \item no unrelated refactor outside the contract scope,
+    \item no production secrets or unrestricted network access.
+\end{itemize}
+
+If a replacement proof passes, the architecture is classified as \statuschanged\ but safe.
+
+If no proof is demonstrated within the bound, Roadmap Canary reports \statusrisk\ with concrete evidence. This means \textbf{viability is no longer demonstrated within the configured Rescue budget}; it does not claim that no implementation path exists in principle.
+
+% ============================================================
+\section{Lifecycle}
+
+\subsection{Creation Lifecycle}
+
+\begin{lstlisting}
+Roadmap item becomes accepted
+        |
+        v
+Bob reads issue / RFC / repository
+        |
+        v
+Bob proposes Future Contract
+        |
+        v
+Human approves capability + fidelity + policy
+        |
+        v
+Bob creates isolated Minimum Viable Proof
+        |
+        v
+Build + existing tests + contract + fidelity checks
+        |
+        v
+Proof passes
+        |
+        v
+Store Roadmap Canary
+\end{lstlisting}
+
+\subsection{Pull Request Lifecycle}
+
+\begin{lstlisting}
+Pull request arrives
+        |
+        v
+Cheap relevance filter
+        |
+        v
+Select possibly affected canaries
+        |
+        v
+Replay each canary on BASE and PR
+        |
+        v
+Classify result
+        |
+        +-------------------------------+
+        |                               |
+    old path works                  old path fails on PR
+        |                               |
+       SAFE                           Rescue
+                                        |
+                              +---------+---------+
+                              |                   |
+                        new proof works      no verified proof found
+                              |                   |
+                       PATH CHANGED          ROADMAP RISK
+                         BUT SAFE        viability no longer demonstrated
+\end{lstlisting}
+
+\subsection{After a PR Merges}
+
+If Rescue found a new valid witness and the PR later merges:
+
+\begin{enumerate}
+    \item rebase/recreate the witness against the new main branch,
+    \item verify the Future Contract again,
+    \item store the new witness as the canonical canary,
+    \item archive metadata about the previous witness if desired.
+\end{enumerate}
+
+The production feature still remains unimplemented until its real roadmap work begins.
+
+\subsection{When the Future Feature Is Finally Built}
+
+When the roadmap capability becomes production functionality:
+
+\begin{enumerate}
+    \item retire the Roadmap Canary,
+    \item convert relevant acceptance tests into normal regression/contract tests,
+    \item archive the canary history as design evidence,
+    \item let production implementation become the new source of truth.
+\end{enumerate}
+
+% ============================================================
+\section{Base-vs-PR Classification}
+
+Every evaluation must run against both the current base branch and the candidate PR branch.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries}c >{\bfseries}c X}
+\toprule
+BASE & PR & Interpretation \\
+\midrule
+PASS & PASS & Existing proof remains valid. Status: \statussafe. \\
+PASS & FAIL & New risk introduced by the PR. Run Rescue before making a final verdict. \\
+FAIL & FAIL & Canary was already broken, stale, or environment-dependent. Do not blame the PR. \\
+FAIL & PASS & The PR improved future viability. Report a roadmap improvement. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The BASE/PR comparison is important because a PR-only failure can be misleading. The canary may already be invalid on main due to earlier changes, an obsolete roadmap contract, or a changed dependency environment.
+
+% ============================================================
+\section{Detailed Example}
+
+\subsection{Initial State}
+
+Roadmap item:
+
+\begin{quote}
+\textbf{\#41 - Support multiple payment providers without changing checkout business logic.}
+\end{quote}
+
+Future Contract:
+
+\begin{lstlisting}
+must_prove:
+  - second provider can be registered
+  - Stripe remains functional
+  - Checkout depends only on provider abstraction
+  - shared provider contract tests pass
+\end{lstlisting}
+
+Bob creates the proof:
+
+\begin{lstlisting}
+PaymentService
+     |
+     v
+PaymentProvider
+     |
+     +-- StripeProvider
+     +-- PayPalCanaryProvider
+
+Canary contract: 8 / 8 PASS
+Status: VIABLE
+\end{lstlisting}
+
+\subsection{A Later Pull Request}
+
+A developer or agent submits:
+
+\begin{quote}
+``Simplify payment handling and remove unnecessary abstractions.''
+\end{quote}
+
+The PR creates direct Stripe coupling:
+
+\begin{lstlisting}
+PaymentService -> StripeClient
+Checkout       -> StripePaymentIntent
+RefundService  -> StripeRefundId
+\end{lstlisting}
+
+Current CI:
+
+\begin{lstlisting}
+Unit tests:        128 / 128 PASS
+Integration tests: PASS
+Normal CI:         GREEN
+\end{lstlisting}
+
+Roadmap Canary:
+
+\begin{lstlisting}
+#41 Multiple payment providers
+BASE: PASS
+PR:   FAIL
+\end{lstlisting}
+
+\subsection{Rescue Case A: Architecture Changed but Capability Survives}
+
+Suppose the PR introduced a new generic registry:
+
+\begin{lstlisting}
+PaymentAdapterRegistry
+     |
+     +-- StripeAdapter
+\end{lstlisting}
+
+The original interface-based canary fails, but Bob discovers:
+
+\begin{lstlisting}
+PaymentAdapterRegistry
+     |
+     +-- StripeAdapter
+     +-- PayPalCanaryAdapter
+\end{lstlisting}
+
+The same Future Contract passes.
+
+Result:
+
+\begin{lstlisting}
+Old path: BROKEN
+New path: VERIFIED
+Verdict:  PATH CHANGED - SAFE
+\end{lstlisting}
+
+The new proof is stored as the canonical Roadmap Canary if the PR merges. It is still not production code.
+
+\subsection{Rescue Case B: Roadmap Risk}
+
+Suppose Rescue cannot satisfy the Future Contract without undoing the PR's core coupling.
+
+Roadmap Canary reports:
+
+\begin{lstlisting}
+ROADMAP RISK
+Capability: #41 Multiple payment providers
+
+Previously:
+  viable proof existed on BASE
+
+After PR:
+  original witness fails
+  bounded Rescue did not produce a valid replacement
+
+Blocking evidence:
+  PaymentService owns StripeClient directly
+  Checkout imports Stripe-only request types
+  RefundService requires Stripe-specific identifiers
+
+Suggested remediation:
+  restore provider boundary before merge
+\end{lstlisting}
+
+Bob may optionally create a repair patch for the current PR, after which the canary is rerun.
+
+% ============================================================
+\section{Repository Storage Model}
+
+A possible repository layout is:
+
+\begin{lstlisting}
+.roadmap-canary/
+  registry.yaml
+
+  issue-41-multiple-payment-providers/
+    contract.yaml
+    metadata.yaml
+    witness.patch
+    tests/
+      provider_contract_test.ts
+    evidence.json
+
+  issue-52-multi-tenancy/
+    contract.yaml
+    metadata.yaml
+    witness.patch
+    tests/
+      tenant_isolation_test.ts
+    evidence.json
+\end{lstlisting}
+
+\subsection{Example Metadata}
+
+\begin{lstlisting}
+roadmap_id: issue-41
+name: multiple-payment-providers
+status: valid
+
+commitment:
+  state: committed
+  target: Q4
+  expires: 2026-12-31
+  blocking_policy: advisory
+
+spec_hash: 91ab27...
+contract_hash: 5f3c10...
+baseline_commit: 72df829...
+
+protected_surfaces:
+  paths: [payment/**, checkout/**]
+  symbols: [PaymentService, PaymentProvider]
+  infrastructure: [dependency-injection]
+
+proof:
+  patch: witness.patch
+  files_changed: 4
+  added_loc: 63
+  new_dependencies: 0
+
+verification:
+  command: npm test -- canary/provider-contract
+  result: pass
+  tests_passed: 8
+  tests_total: 8
+  fidelity_evidence:
+    - checkout integration path exercised
+    - shared provider contract passed
+    - no Stripe types imported by Checkout
+    - approved acceptance tests unchanged
+
+created_by: bob
+last_verified: 2026-09-25
+\end{lstlisting}
+
+\subsection{Patch vs Branch Storage}
+
+For a hackathon implementation, storing a patch plus tests is simpler than maintaining permanent branches for every canary.
+
+A runner can:
+
+\begin{enumerate}
+    \item create an isolated Git worktree,
+    \item checkout the target commit,
+    \item apply the canary patch,
+    \item inject/run the canary tests,
+    \item collect build and test evidence,
+    \item delete the worktree.
+\end{enumerate}
+
+Dedicated Git refs or an external artifact store can be added later for larger deployments.
+
+% ============================================================
+\section{System Architecture}
+
+\begin{lstlisting}
+                  +----------------------+
+                  | GitHub / Git PR      |
+                  +----------+-----------+
+                             |
+                             v
+                  +----------------------+
+                  | Roadmap Canary App   |
+                  +----------+-----------+
+                             |
+             +---------------+----------------+
+             |                                |
+             v                                v
+   +--------------------+          +-----------------------+
+   | Relevance Filter   |          | Canary Registry       |
+   | deterministic      |          | contracts + witnesses |
+   +---------+----------+          +-----------+-----------+
+             |                                 |
+             +----------------+----------------+
+                              |
+                              v
+                   +----------------------+
+                   | Replay Orchestrator  |
+                   +----------+-----------+
+                              |
+                 +------------+------------+
+                 |                         |
+                 v                         v
+          +-------------+           +-------------+
+          | BASE runner |           | PR runner   |
+          +------+------+           +------+------+ 
+                 |                         |
+                 +------------+------------+
+                              |
+                              v
+                     +------------------+
+                     | Classifier       |
+                     +--------+---------+
+                              |
+                    old witness failed?
+                              |
+                              v
+                     +------------------+
+                     | Bob Rescue Agent |
+                     +--------+---------+
+                              |
+                              v
+                     +------------------+
+                     | Verifier         |
+                     | build/test/check |
+                     +--------+---------+
+                              |
+                              v
+                     +------------------+
+                     | GitHub Check     |
+                     | evidence + state |
+                     +------------------+
+\end{lstlisting}
+
+% ============================================================
+\section{Component Details}
+
+\subsection{1. Roadmap Ingestion}
+
+Inputs may include:
+
+\begin{itemize}
+    \item accepted GitHub issues,
+    \item milestone items,
+    \item approved RFCs,
+    \item GitHub Projects cards,
+    \item manually registered capability descriptions.
+\end{itemize}
+
+Only explicitly accepted, architecture-sensitive items should be eligible for a canary.
+
+\subsection{2. Future Contract Builder}
+
+Bob reads the roadmap item, linked design notes, and repository architecture. It proposes:
+
+\begin{itemize}
+    \item capability statement,
+    \item must-prove conditions,
+    \item must-not shortcuts,
+    \item scope boundaries,
+    \item proof budget,
+    \item verification commands.
+\end{itemize}
+
+The contract is reviewed by a human before activation.
+
+\subsection{3. Minimum Viable Proof Builder}
+
+Bob works in an isolated worktree and attempts to satisfy the Future Contract with the smallest reasonable patch.
+
+The builder should be instructed explicitly:
+
+\begin{itemize}
+    \item do not build production UX or completeness,
+    \item prefer fake/sandbox adapters where appropriate,
+    \item do not change unrelated functionality,
+    \item keep the proof inside the configured budget,
+    \item leave current behavior unchanged,
+    \item generate dedicated canary acceptance tests.
+\end{itemize}
+
+\subsection{4. Deterministic Verifier}
+
+Bob never decides the final status by opinion.
+
+Verification may include:
+
+\begin{itemize}
+    \item compilation/build,
+    \item unit/contract tests,
+    \item schema validation,
+    \item API compatibility checks,
+    \item AST/dependency constraints,
+    \item file/LOC/dependency proof-budget checks,
+    \item existing production tests.
+\end{itemize}
+
+The verifier produces structured evidence.
+
+\subsection{5. Relevance Filter}
+
+Running every canary against every PR can become expensive, but false negatives are more dangerous than false positives. A missed relevant canary can silently hide a roadmap risk; an extra replay only costs compute.
+
+Therefore the relevance filter should be deliberately \textbf{conservative}.
+
+Each Future Contract persists explicit \texttt{protected\_surfaces} when the canary is created. Bob may propose these surfaces, but they become part of the approved contract metadata.
+
+Signals can include:
+
+\begin{itemize}
+    \item protected paths and modules,
+    \item protected symbols,
+    \item dependency-injection or infrastructure surfaces,
+    \item imports/dependency graph overlap,
+    \item API/schema changes,
+    \item package/config changes,
+    \item manually declared domains/tags.
+\end{itemize}
+
+Example:
+
+\begin{lstlisting}
+protected_surfaces:
+  paths:
+    - payment/**
+    - checkout/**
+  symbols:
+    - PaymentService
+    - PaymentProvider
+  infrastructure:
+    - dependency-injection
+\end{lstlisting}
+
+A PR touching \texttt{config/dependency-injection.ts} should therefore still select the payment canary even if it does not touch the payment directory directly.
+
+For the hackathon MVP, correctness is more important than optimization. If only one to three demo canaries exist, replay all of them and postpone sophisticated relevance filtering until after the core Canary/Rescue mechanism works.
+
+\subsection{6. Replay Runner}
+
+For each selected canary:
+
+\begin{enumerate}
+    \item create BASE worktree,
+    \item apply witness patch,
+    \item run verification,
+    \item create PR worktree,
+    \item apply same witness patch,
+    \item run verification,
+    \item record BASE/PR result.
+\end{enumerate}
+
+Both runs should use the same toolchain/container image where possible.
+
+\subsection{7. Rescue Agent}
+
+Rescue runs only when BASE passes and PR fails, or when the product explicitly wants to refresh a stale proof.
+
+Bob receives:
+
+\begin{itemize}
+    \item Future Contract,
+    \item PR branch,
+    \item old proof and failure logs,
+    \item proof budget,
+    \item relevant repository context.
+\end{itemize}
+
+Bob must create a fresh proof, not merely patch the old proof until it compiles.
+
+The new proof is accepted only after deterministic verification.
+
+\subsection{8. Result Classifier}
+
+Suggested statuses:
+
+\begin{itemize}
+    \item \textbf{SAFE - PRESERVED}
+    \item \textbf{SAFE - PATH CHANGED}
+    \item \textbf{ROADMAP RISK}
+    \item \textbf{CANARY STALE}
+    \item \textbf{CANARY BROKEN ON BASE}
+    \item \textbf{ROADMAP IMPROVEMENT}
+    \item \textbf{NOT EVALUATED / IRRELEVANT}
+\end{itemize}
+
+% ============================================================
+\section{IBM Bob 2.0 Role}
+
+Roadmap Canary should not be presented as a generic CI tool that happens to call an LLM. Bob is valuable because it makes speculative future implementations cheap enough to operationalize.
+
+Bob's responsibilities are:
+
+\subsection{Repository Understanding}
+
+Bob must understand the current architecture, existing abstractions, tests, domain boundaries, and relevant implementation patterns before creating a proof.
+
+\subsection{Future Contract Drafting}
+
+Bob translates an accepted natural-language roadmap item into a concrete, reviewable capability contract.
+
+\subsection{Speculative Implementation}
+
+Bob creates the Minimum Viable Proof in an isolated environment without touching production code.
+
+\subsection{Parallel Evaluation}
+
+Multiple relevant canaries can be evaluated independently for a PR. Parallel agent tasks are a natural fit because each canary has separate context, acceptance conditions, and evidence.
+
+\subsection{Rescue}
+
+When an old proof becomes invalid, Bob searches for a replacement path under the same capability contract.
+
+\subsection{Explanation and Repair}
+
+If Rescue fails, Bob explains the concrete architectural blockers and may propose a repair to the current PR.
+
+\begin{notebox}
+\textbf{Design principle:}
+Bob proposes contracts, proofs, Rescue paths, explanations, and fixes. Deterministic repository/toolchain checks decide whether those artifacts actually pass.
+\end{notebox}
+
+% ============================================================
+\section{Canary Staleness and Versioning}
+
+A canary can become invalid even without a problematic PR.
+
+The roadmap itself may change. For example:
+
+\begin{quote}
+Old requirement: support Stripe + PayPal.\\
+New requirement: support arbitrary tenant-specific payment providers.
+\end{quote}
+
+The old proof no longer represents the accepted future.
+
+Each canary should therefore bind to:
+
+\begin{itemize}
+    \item source roadmap item version/hash,
+    \item Future Contract hash,
+    \item baseline commit,
+    \item commitment state and target horizon,
+    \item expiry date,
+    \item blocking policy,
+    \item relevant dependency/toolchain metadata.
+\end{itemize}
+
+If the roadmap or contract changes:
+
+\begin{lstlisting}
+CANARY STALE
+Reason: contract hash changed
+Action: regeneration required
+\end{lstlisting}
+
+A stale, expired, cancelled, or materially changed canary must never block a PR. It should move to an advisory/stale state until a human re-approves a refreshed Future Contract.
+
+% ============================================================
+\section{Scalability and Cost Control}
+
+A company might have hundreds of backlog items and dozens of PRs each day. Roadmap Canary is practical only if it is selective.
+
+\subsection{Selective Canary Creation}
+
+Do not create canaries for every idea or backlog issue. A capability should be canary-eligible only when it is:
+
+\begin{itemize}
+    \item formally accepted or committed,
+    \item architecturally significant,
+    \item sufficiently stable to define a Future Contract,
+    \item expected within a meaningful planning horizon,
+    \item expensive if architectural optionality is accidentally lost.
+\end{itemize}
+
+This avoids YAGNI-driven architecture freezing. A speculative product idea should not constrain today's code forever. Every active canary should have lifecycle metadata such as commitment state, target horizon, expiry, and blocking policy. The recommended default policy is \textbf{advisory}; teams may opt into merge blocking only for high-confidence committed capabilities.
+
+\subsection{Selective Replay}
+
+Example enterprise flow:
+
+\begin{lstlisting}
+300 roadmap/backlog items
+        |
+12 active architecture-sensitive canaries
+        |
+PR relevance filter
+        |
+3 relevant canaries
+        |
+2 preserved
+1 failed old witness
+        |
+1 Rescue attempt
+\end{lstlisting}
+
+Only the expensive Rescue step needs agentic implementation work.
+
+\subsection{Caching}
+
+Results can be cached by:
+
+\begin{itemize}
+    \item canary hash,
+    \item target commit hash,
+    \item environment/toolchain hash.
+\end{itemize}
+
+If the same exact canary/environment/commit combination was already verified, it does not need to be rerun.
+
+% ============================================================
+\section{GitHub and Developer Experience}
+
+\subsection{GitHub Check Example}
+
+A PR check could render:
+
+\begin{lstlisting}
+ROADMAP CANARY
+
+Current product CI: PASS
+Relevant future capabilities: 3
+
+#41 Multiple payment providers
+  BASE: PASS
+  PR:   FAIL
+  Rescue: FAIL
+  STATUS: ROADMAP RISK
+
+  Evidence:
+  - Checkout imports StripePaymentIntent directly
+  - PaymentService owns StripeClient
+  - RefundService requires Stripe-specific IDs
+
+#52 Multi-tenancy
+  BASE: PASS
+  PR:   PASS
+  STATUS: SAFE
+
+#67 Enterprise SSO
+  Not relevant to this PR
+\end{lstlisting}
+
+\subsection{CLI Surface}
+
+An MVP CLI could expose:
+
+\begin{lstlisting}
+roadmap-canary init
+roadmap-canary register --issue 41
+roadmap-canary create 41
+roadmap-canary list
+roadmap-canary check --base main --head feature/payment-refactor
+roadmap-canary rescue 41 --head feature/payment-refactor
+roadmap-canary refresh 41
+roadmap-canary retire 41
+\end{lstlisting}
+
+\subsection{Human Approval Points}
+
+Human review should be required for:
+
+\begin{itemize}
+    \item activating a Future Contract,
+    \item approving Proof Fidelity requirements,
+    \item approving commitment / target / expiry metadata,
+    \item changing a contract,
+    \item promoting a Roadmap Risk from advisory to merge-blocking policy,
+    \item optionally accepting a new canonical canary after Rescue.
+\end{itemize}
+
+The default deployment posture should be advisory. Merge blocking is a repository/team policy decision, not an automatic consequence of Bob failing to find a Rescue proof.
+
+% ============================================================
+\section{Implementation Details}
+
+\subsection{Recommended MVP Stack}
+
+A hackathon implementation can stay deliberately narrow:
+
+\begin{itemize}
+    \item \textbf{CLI / Orchestrator:} Python.
+    \item \textbf{Service/API:} FastAPI if a web dashboard or GitHub App callback is required.
+    \item \textbf{Git isolation:} Git worktrees.
+    \item \textbf{Canary artifact:} unified/binary patch + contract tests + YAML metadata.
+    \item \textbf{Static relevance filter:} changed paths + import graph + optional Tree-sitter parsing.
+    \item \textbf{Persistence:} repository directory for artifacts; SQLite only if server-side state is needed.
+    \item \textbf{Verification:} project-native commands such as npm/pytest plus deterministic custom checks.
+    \item \textbf{CI integration:} GitHub Actions or GitHub Checks API.
+    \item \textbf{Bob integration:} isolated Bob tasks for contract drafting, proof generation, Rescue, explanation, and optional remediation.
+\end{itemize}
+
+\subsection{Worktree Execution Model}
+
+Pseudo-flow:
+
+\begin{lstlisting}
+def replay_canary(canary, target_commit):
+    worktree = create_worktree(target_commit)
+    try:
+        apply_patch(worktree, canary.witness_patch)
+        copy_canary_tests(worktree, canary.tests)
+        return run_verifier(worktree, canary.contract)
+    finally:
+        remove_worktree(worktree)
+\end{lstlisting}
+
+\subsection{PR Evaluation Algorithm}
+
+\begin{lstlisting}
+def evaluate_pr(base, head):
+    relevant = select_relevant_canaries(base, head)
+    results = []
+
+    for canary in relevant:
+        base_result = replay_canary(canary, base)
+        pr_result   = replay_canary(canary, head)
+
+        if base_result.pass and pr_result.pass:
+            results.append(SAFE_PRESERVED)
+
+        elif base_result.pass and not pr_result.pass:
+            rescue = bob_rescue(canary.contract, head,
+                                old_failure=pr_result)
+            verified = verify_rescue(rescue, canary.contract)
+
+            if verified.pass:
+                results.append(SAFE_PATH_CHANGED)
+            else:
+                results.append(ROADMAP_RISK)  # viability no longer demonstrated within rescue budget
+
+        elif not base_result.pass and pr_result.pass:
+            results.append(ROADMAP_IMPROVEMENT)
+
+        else:
+            results.append(CANARY_BROKEN_OR_STALE)
+
+    return results
+\end{lstlisting}
+
+\subsection{Proof Budget Enforcement}
+
+A proof should remain small enough to represent feasibility rather than premature feature development.
+
+Deterministic budget checks may include:
+
+\begin{lstlisting}
+files_changed <= 8
+added_loc <= 180
+new_dependencies <= 1
+unrelated_modules_changed == 0
+production_secrets_used == 0
+\end{lstlisting}
+
+Budget overruns can reject the proof or require human approval.
+
+Proof Fidelity checks should be evaluated separately from size budgets. Typical deterministic checks include:
+
+\begin{lstlisting}
+approved_acceptance_tests_modified == 0
+required_integration_paths_exercised == true
+forbidden_mock_replacements == 0
+dependency_constraints_satisfied == true
+existing_product_tests_pass == true
+\end{lstlisting}
+
+\subsection{Sandboxing}
+
+Canary and Rescue code is agent-generated and should be treated as untrusted.
+
+Recommended defaults:
+
+\begin{itemize}
+    \item run inside an isolated container/worktree,
+    \item no production credentials,
+    \item no unrestricted network access,
+    \item strict command allowlist where practical,
+    \item execution timeout and resource limits,
+    \item delete environment after verification.
+\end{itemize}
+
+% ============================================================
+\section{Key Product Features}
+
+\begin{longtable}{p{0.27\textwidth}p{0.67\textwidth}}
+\toprule
+\textbf{Feature} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Feature} & \textbf{Description} \\
+\midrule
+\endhead
+Future Contract Builder & Converts an accepted roadmap item into explicit must-prove / must-not conditions, scope, and proof budget. \\
+\addlinespace
+Minimum Viable Proof Generator & Uses Bob to create the smallest disposable implementation that satisfies the Future Contract. \\
+\addlinespace
+Executable Canary Registry & Stores current proof patches, tests, hashes, baseline, and evidence for active future capabilities. \\
+\addlinespace
+Base-vs-PR Replay & Runs the exact same current witness against both repository states to isolate regressions introduced by the PR. \\
+\addlinespace
+Relevance Filter & Avoids running unrelated canaries by using paths, dependency overlap, symbols, schemas, and capability domains. \\
+\addlinespace
+Rescue & If the old witness dies, Bob attempts a fresh implementation path under the same Future Contract. \\
+\addlinespace
+Path-Changed Classification & Distinguishes architecture evolution from loss of future capability. \\
+\addlinespace
+Roadmap Risk Evidence & Reports exact build/test/contract failures and concrete blockers instead of an LLM-generated score. \\
+\addlinespace
+Canary Staleness Detection & Invalidates canaries when roadmap/spec/contract hashes change. \\
+\addlinespace
+Roadmap Improvement Detection & Identifies cases where a PR makes an existing broken canary viable. \\
+\addlinespace
+Optional PR Repair & Bob can propose a minimal repair to preserve the future capability after a Roadmap Risk is found. \\
+\addlinespace
+Canary Retirement & When the feature ships, retire the speculative witness and convert useful acceptance checks into normal tests. \\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Failure Modes and Edge Cases}
+
+\subsection{The Old Canary Fails Because the Architecture Improved}
+
+Handled by Rescue. A new proof turns the result into \statuschanged\ rather than a regression.
+
+\subsection{Bob Cannot Find a Rescue but a Human Could}
+
+This is possible. Roadmap Canary should report that no proof was demonstrated within the bounded search, not that the capability is mathematically impossible. Teams may override the check or request human review.
+
+\subsection{The Future Contract Is Poorly Written}
+
+A weak contract creates a weak canary. Contracts require human approval and should be versioned.
+
+\subsection{The Canary Is Too Large}
+
+If the smallest proof requires major feature development, the roadmap item may be too broad or the architecture may genuinely require substantial work. Enforce proof budgets and allow the item to be marked ``not suitable for canarying.''
+
+\subsection{Canary Tests Are Flaky}
+
+A flaky canary is not useful evidence. Require repeatability before activating it, and quarantine/repair unstable canaries.
+
+\subsection{The Roadmap Item Is Cancelled}
+
+Retire the canary immediately. It should no longer influence PRs.
+
+\subsection{The Roadmap Item Changes}
+
+Contract/spec hash mismatch marks the canary stale and triggers regeneration.
+
+\subsection{A Dependency Upgrade Breaks the Canary}
+
+If BASE also fails, classify it as a base/staleness problem rather than blaming the current PR.
+
+\subsection{The Future Feature Requires External Infrastructure}
+
+Use the minimum credible sandbox, emulator, contract server, fake adapter, or ephemeral service needed to prove the architectural capability. The proof should not require production infrastructure.
+
+% ============================================================
+\section{Security and Governance}
+
+Roadmap Canary may generate and execute speculative code. Enterprise adoption therefore requires guardrails.
+
+\begin{itemize}
+    \item Canaries execute in isolated environments.
+    \item Production secrets are prohibited.
+    \item Network access is disabled by default or allowlisted.
+    \item Future Contracts are human-approved.
+    \item Roadmap Risk is advisory by default; merge blocking is configurable by repository/team policy.
+    \item All Bob-generated proof patches and Rescue patches are auditable.
+    \item The final verdict is based on executable verification evidence.
+\end{itemize}
+
+% ============================================================
+\section{Target Users and Business Value}
+
+\subsection{Primary Users}
+
+\begin{itemize}
+    \item platform engineering teams,
+    \item staff/principal engineers,
+    \item architecture groups,
+    \item product engineering teams with committed quarterly roadmaps,
+    \item large monorepos with multiple teams changing shared infrastructure,
+    \item enterprise modernization programs.
+\end{itemize}
+
+\subsection{Business Value}
+
+Roadmap Canary aims to surface future architectural cost at the PR that introduces it rather than months later when the roadmap item begins.
+
+The clearest business story is:
+
+\begin{quote}
+\textbf{Move the discovery of a six-week architectural refactor from the quarter when the feature starts to the PR that introduced the architectural cost.}
+\end{quote}
+
+The primary buyer/user is the platform or architecture team in an organization where multiple teams modify shared codebases against committed product roadmaps.
+
+The value proposition is:
+
+\begin{itemize}
+    \item reduce surprise refactor work,
+    \item preserve strategic platform flexibility,
+    \item make architecture consequences visible during normal development,
+    \item give reviewers concrete evidence instead of vague ``future-proofing'' arguments,
+    \item use AI agents to automate an engineering practice that was previously too expensive to perform continuously.
+\end{itemize}
+
+% ============================================================
+\section{Distinctive Mechanism and Adjacent Concepts}
+
+Roadmap Canary is adjacent to several established ideas, but the mechanism is different.
+
+\begin{longtable}{p{0.25\textwidth}p{0.32\textwidth}p{0.36\textwidth}}
+\toprule
+\textbf{Concept} & \textbf{What It Does} & \textbf{Roadmap Canary Difference} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Concept} & \textbf{What It Does} & \textbf{Roadmap Canary Difference} \\
+\midrule
+\endhead
+Regression tests & Protect capabilities that already exist. & Protects a demonstrated path to an accepted capability that does not exist in production yet. \\
+\addlinespace
+Architecture fitness functions & Enforce current architectural properties and quality constraints. & Proves a specific future capability through an executable speculative implementation. \\
+\addlinespace
+Architectural spikes & One-time throwaway prototypes used to answer feasibility questions. & Keeps the smallest proof as a persistent sentinel and continuously revalidates or rescues it. \\
+\addlinespace
+Requirement / change-impact analysis & Estimates which current code may be affected by a new requirement or change. & Executes a previously demonstrated future path against BASE and PR. \\
+\addlinespace
+Speculative CI / merge queues & Test combinations of code that has already been written. & Tests current code against an accepted capability that has not been built yet. \\
+\bottomrule
+\end{longtable}
+
+The central primitive is therefore:
+
+\begin{quote}
+\textbf{An executable viability witness for an accepted but unimplemented capability.}
+\end{quote}
+
+% ============================================================
+\section{Hackathon MVP Scope}
+
+The full product can become large. The hackathon implementation should prove one mechanism extremely well.
+
+\subsection{Recommended Demo Repository}
+
+Use a small TypeScript/Node or Python service with:
+
+\begin{itemize}
+    \item payment domain,
+    \item clean provider abstraction on base,
+    \item existing Stripe implementation,
+    \item a future contract for multi-provider support,
+    \item a PR that introduces direct Stripe coupling.
+\end{itemize}
+
+\subsection{MVP Features}
+
+Build only:
+
+\begin{enumerate}
+    \item one human-approved Future Contract with explicit Proof Fidelity evidence,
+    \item Bob-generated Minimum Viable Proof,
+    \item patch/test artifact storage,
+    \item worktree-based BASE/PR replay,
+    \item deterministic verification,
+    \item one bounded Rescue attempt,
+    \item CLI or GitHub result showing SAFE / PATH CHANGED / ROADMAP RISK,
+    \item a second prepared PR demonstrating the opposite Rescue outcome if time permits.
+\end{enumerate}
+
+Do \textbf{not} make the relevance filter, dashboard, automatic repair, enterprise integrations, or complex analytics prerequisites for the demo. With one to three canaries, replay them all. The core mechanism must work before optimization or presentation layers are added.
+
+\subsection{Suggested 48-Hour Build Plan}
+
+\begin{longtable}{p{0.16\textwidth}p{0.77\textwidth}}
+\toprule
+\textbf{Window} & \textbf{Goal} \\
+\midrule
+0-6h & Build sample repo, Future Contract format, canary artifact structure, and deterministic verification commands. \\
+\addlinespace
+6-14h & Implement worktree runner, patch application, BASE/PR replay, and classification. \\
+\addlinespace
+14-22h & Integrate Bob proof generation and create the first working canary. \\
+\addlinespace
+22-30h & Implement bounded Rescue and verification of the replacement proof. \\
+\addlinespace
+30-36h & Build the exact demo scenarios and polished CLI/GitHub check output. \\
+\addlinespace
+36-42h & Harden Proof Fidelity checks, add the second Rescue outcome, and only then add relevance filtering or repair if time remains. \\
+\addlinespace
+42-48h & Testing, polish, README, architecture diagram, video, and submission material. \\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Demo Script}
+
+A strong 60-90 second demo:
+
+\begin{enumerate}
+    \item Show roadmap item \#41: \textbf{Multiple payment providers}.
+    \item Open its Future Contract.
+    \item Show the current canary: a tiny PayPal/fake-provider proof that is not production code.
+    \item Run the canary on main: \texttt{VIABLE / 8 of 8 checks pass}.
+    \item Open a PR that simplifies payment code by directly coupling to Stripe.
+    \item Show normal CI: \texttt{128 / 128 tests PASS}.
+    \item Roadmap Canary runs BASE and PR: \texttt{BASE PASS / PR FAIL}.
+    \item Bob starts Rescue under the same Future Contract.
+    \item For the main dramatic case, Rescue fails within its configured budget and the UI shows \texttt{ROADMAP RISK}: the previous viability proof is lost and no replacement proof was demonstrated.
+    \item Bob repairs the current PR to restore a provider boundary.
+    \item Replay: Roadmap Canary returns to green.
+\end{enumerate}
+
+Optional second mini-demo:
+
+\begin{itemize}
+    \item old canary fails,
+    \item Rescue finds a new adapter-registry path,
+    \item status becomes \texttt{PATH CHANGED - SAFE}, demonstrating that the system does not freeze one architecture.
+\end{itemize}
+
+\begin{pitchbox}
+\centering
+\textbf{Your tests say today's code still works.}\\
+\textbf{Roadmap Canary checks whether tomorrow's code still can.}
+\end{pitchbox}
+
+% ============================================================
+\section{Success Criteria}
+
+A successful MVP should demonstrate all of the following:
+
+\begin{itemize}
+    \item A future capability is represented by an explicit Future Contract.
+    \item Bob can generate a small executable witness that passes deterministic checks and approved Proof Fidelity requirements.
+    \item The witness is stored separately from production code.
+    \item The same witness can be replayed on BASE and PR.
+    \item A PR can keep all ordinary tests green while breaking the old witness.
+    \item Rescue can distinguish ``old path broke'' from ``future capability lost.''
+    \item At least one scenario produces \texttt{PATH CHANGED - SAFE}.
+    \item At least one scenario produces \texttt{ROADMAP RISK} with concrete evidence and without claiming that the future capability is mathematically impossible.
+    \item The final verdict comes from executable checks, not an LLM score.
+\end{itemize}
+
+% ============================================================
+\section{Future Extensions}
+
+After the hackathon, possible extensions include:
+
+\begin{itemize}
+    \item GitHub Projects / Jira / Linear roadmap integration,
+    \item automatic detection of architecture-sensitive roadmap items,
+    \item multiple candidate proofs and diversity search,
+    \item proof-cost trend history over time,
+    \item cross-service canaries for microservice architectures,
+    \item API/schema compatibility canaries,
+    \item scheduled canary refresh independent of PRs,
+    \item architecture optionality dashboard,
+    \item policy rules such as ``blocking only for committed Q4 items,''
+    \item conversion of shipped canaries into permanent regression suites.
+\end{itemize}
+
+% ============================================================
+\section{Final Definition}
+
+Roadmap Canary is a CI mechanism for \textbf{future capability viability evidence}.
+
+For each selected committed roadmap item, it stores a human-approved Future Contract, lifecycle policy, Proof Fidelity requirements, and a current executable Minimum Viable Proof. The proof is a disposable canary, not production implementation. When code changes, the system compares BASE and PR using the current witness. If the witness breaks, Bob attempts a bounded Rescue to establish another valid path. Only executable, deterministically verified evidence determines the status.
+
+A failed Rescue means that viability is no longer demonstrated within the configured search budget. It does not prove that no possible implementation exists.
+
+The project is therefore not trying to predict the future in the abstract. It is protecting future capabilities the organization has already decided matter.
+
+\begin{pitchbox}
+\textbf{Final one-line pitch:}
+Roadmap Canary maintains executable evidence that committed future capabilities still have a viable path through the evolving codebase.
+\end{pitchbox}
+
+\end{document}
