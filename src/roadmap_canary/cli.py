@@ -121,6 +121,12 @@ def check(
         min=1,
         help="Maximum turns for one IBM Bob Rescue attempt.",
     ),
+    bob_max_cost: float = typer.Option(
+        0.50,
+        "--bob-max-cost",
+        min=0.001,
+        help="Maximum Bobcoins for one IBM Bob Rescue attempt.",
+    ),
     bob_timeout: int = typer.Option(
         600,
         "--bob-timeout",
@@ -143,7 +149,11 @@ def check(
     rescue_agent = (
         PatchRescueAgent(rescue_patch)
         if rescue_patch is not None
-        else BobRescueAgent(max_turns=bob_max_turns, timeout_seconds=bob_timeout)
+        else BobRescueAgent(
+            max_turns=bob_max_turns,
+            max_cost=bob_max_cost,
+            timeout_seconds=bob_timeout,
+        )
     )
 
     try:
