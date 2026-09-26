@@ -38,6 +38,15 @@ def remove_worktree(repo: str | Path, destination: str | Path) -> None:
     _run_git(repo_path, "worktree", "remove", "--force", str(destination_path))
 
 
-def git_diff(workspace: str | Path) -> str:
+def stage_all_changes(workspace: str | Path) -> None:
+    """Normalize tracked and untracked candidate changes into the worktree index."""
+
     workspace_path = Path(workspace).resolve()
-    return _run_git(workspace_path, "diff", "--binary").stdout
+    _run_git(workspace_path, "add", "-A")
+
+
+def git_diff(workspace: str | Path) -> str:
+    """Return the complete candidate patch relative to the worktree's HEAD."""
+
+    workspace_path = Path(workspace).resolve()
+    return _run_git(workspace_path, "diff", "HEAD", "--binary", "--").stdout
