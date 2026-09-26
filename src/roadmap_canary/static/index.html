@@ -58,6 +58,8 @@
     .btn.link { border:0; background:transparent; color:#58a6ff; padding:0; height:auto; }
     .btn.link:hover { background:transparent; text-decoration:underline; }
 
+    .capability-picker { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+    .capability-picker .btn { height:40px; white-space:nowrap; }
     .capability-summary { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:13px 14px; margin-top:10px; }
     .capability-top { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
     .capability-name { font-weight:650; }
@@ -122,12 +124,14 @@
     .modal pre { margin:0; padding:14px; background:var(--bg); border:1px solid var(--border-soft); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
     .bob-grid { display:grid; grid-template-columns:150px 1fr; gap:9px 16px; font-size:12px; }
     .bob-grid div:nth-child(odd) { color:var(--muted); }
+    .setup-steps { margin:16px 0 18px; padding-left:20px; color:#c9d1d9; }
+    .setup-steps li { margin:8px 0; }
 
     @media (max-width:700px) {
       .topbar { padding:0 14px; }
       .container { width:min(100% - 24px,920px); padding-top:26px; }
-      .row,.advanced-grid,.repo-connect { grid-template-columns:1fr; }
-      .repo-connect .btn { width:max-content; }
+      .row,.advanced-grid,.repo-connect,.capability-picker { grid-template-columns:1fr; }
+      .repo-connect .btn,.capability-picker .btn { width:max-content; }
       .repo-meta { align-items:flex-start; flex-direction:column; gap:5px; }
       .integrations .integration span.label { display:none; }
       .capability-top,.analysis-head { flex-direction:column; }
@@ -166,8 +170,11 @@
 
       <section class="section" id="analysisFormSection" style="display:none">
         <div class="field">
-          <label for="canary">Capability</label>
-          <select id="canary" disabled><option value="">No Canary loaded</option></select>
+          <label for="canary">Future capability</label>
+          <div class="capability-picker">
+            <select id="canary" disabled><option value="">No Canary loaded</option></select>
+            <button class="btn" id="addCapability" type="button">+ Add</button>
+          </div>
           <div id="contractBox"></div>
         </div>
 
@@ -229,6 +236,25 @@
       <div class="drawer-head"><h2 id="contractTitle">Future Contract</h2><button class="icon-btn" data-close="contractBackdrop" type="button">×</button></div>
       <div id="contractDetails"></div>
     </aside>
+  </div>
+
+  <div class="modal-backdrop" id="addCapabilityBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addCapabilityTitle">
+      <div class="modal-head"><h2 id="addCapabilityTitle">Add future capability</h2><button class="icon-btn" data-close="addCapabilityBackdrop" type="button">×</button></div>
+      <p style="margin:0;color:#c9d1d9">A capability becomes an active Canary after a human-approved Future Contract has a verified executable witness.</p>
+      <ol class="setup-steps">
+        <li>Create and approve the Future Contract.</li>
+        <li>Prepare a small witness branch that proves one viable path from the current base.</li>
+        <li>Capture it. Roadmap Canary replays and deterministically verifies the witness before accepting the Canary.</li>
+      </ol>
+      <pre>roadmap-canary capture \
+  --repo /path/to/repository \
+  --contract /path/to/contract.yaml \
+  --base main \
+  --witness &lt;witness-ref&gt; \
+  --output /path/to/repository/.roadmap-canary/&lt;capability-id&gt;</pre>
+      <p class="field-help" style="margin-top:12px">After capture, sync the repository to load the new capability. The witness is executable evidence, not production implementation.</p>
+    </div>
   </div>
 
   <div class="modal-backdrop" id="bobBackdrop">
@@ -485,6 +511,7 @@
   $("inspect").addEventListener("click", inspectRepo);
   $("repo").addEventListener("keydown", e => { if (e.key === "Enter") inspectRepo(); });
   $("canary").addEventListener("change", renderContractSummary);
+  $("addCapability").addEventListener("click", () => $("addCapabilityBackdrop").classList.add("open"));
   $("analyze").addEventListener("click", analyze);
   $("backToSetup").addEventListener("click", () => { $("analysisView").style.display = "none"; $("setupView").style.display = "block"; window.scrollTo({top:0, behavior:"smooth"}); });
   $("bobStatus").addEventListener("click", () => $("bobBackdrop").classList.add("open"));
