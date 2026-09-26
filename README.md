@@ -2,16 +2,23 @@
 
 **Regression testing for software you haven't built yet.**
 
-Roadmap Canary maintains executable evidence that an accepted future capability still has at least one demonstrated viable path through an evolving codebase.
+Traditional CI tells you whether today's software still works. Roadmap Canary asks a second question:
 
-## Core idea
+> **Does this code change still leave a demonstrated viable path to a committed future capability?**
 
-Traditional CI asks whether today's software still works. Roadmap Canary adds a second question: does an accepted future capability still have a demonstrated executable path?
+A refactor can keep every current test green while quietly making a planned feature much harder to build. Roadmap Canary makes that kind of regression visible.
 
-The engine stores a human-approved Future Contract and a disposable witness patch. It replays that witness on BASE and PR states, verifies it with deterministic checks, and invokes Rescue only when a previously demonstrated path disappears.
+## How it works
+
+For each future capability the team wants to protect, Roadmap Canary keeps two things:
+
+- a **human-approved Future Contract** defining what must remain possible, what evidence counts, protected tests/surfaces, and the allowed proof budget
+- a **verified witness**, which is a small disposable executable proof that the capability is achievable from the current architecture
+
+The witness is not the future product implementation and is not intended to be merged into production. It only establishes a known-good path that future changes can be tested against.
 
 ```text
-accepted future capability
+committed future capability
           |
           v
 human-approved Future Contract
@@ -31,41 +38,47 @@ BASE replay -------- PR replay
                        |
           deterministic verification
                  /             \
-       PATH CHANGED         ROADMAP RISK
-          - SAFE
+     PATH CHANGED - SAFE    ROADMAP RISK
 ```
 
-The central invariant is:
+The central trust boundary is:
 
 > **Bob proposes. Roadmap Canary verifies.**
 
-IBM Bob may inspect the repository and create a candidate replacement proof inside an isolated Rescue worktree. Bob never decides the final Roadmap Canary status. Executable checks, protected-test integrity, proof budgets, and other approved evidence determine whether the candidate verifies.
+IBM Bob may search for a replacement path when the known witness stops working, but Bob never decides the final result. Roadmap Canary independently checks the candidate using the approved verification commands, protected-test integrity, and proof budget.
 
-## Current implementation
+## Establishing a future capability
 
-The core engine includes:
+A capability becomes an active Canary only after a baseline has been proven.
 
-- strict Future Contract parsing and canonical hashing
-- verified Canary capture from a BASE ref and witness ref
-- Canary artifact integrity checks
-- isolated Git worktrees for BASE, PR, and Rescue
-- witness replay using `git apply --index`
-- deterministic verification commands
-- protected-test integrity checks
-- proof-budget enforcement
-- npm dependency-addition checks
-- BASE/PR classification
-- `SAFE`, `PATH_CHANGED`, `ROADMAP_RISK`, and `STALE` semantics
-- Future Contract expiry handling
-- Rescue-agent abstraction
-- IBM Bob Shell Rescue adapter
-- bounded Bob turns, Bobcoin cost, and wall-clock time
-- MCP disabled by default during Rescue
-- subagents disabled by default during Rescue
-- prepared-patch Rescue adapter for deterministic testing
-- structured `result.json` evidence
-- verified replacement-witness patch persistence
-- explicit human-triggered promotion of a successful replacement witness
+1. Define and approve the Future Contract.
+2. Prepare a minimal witness on a separate Git ref.
+3. Capture it with Roadmap Canary.
+4. Roadmap Canary replays the witness on a clean BASE worktree and accepts it only if deterministic verification passes.
+
+Example:
+
+```bash
+roadmap-canary capture \
+  --repo /path/to/target-repo \
+  --contract examples/issue-1/contract.yaml \
+  --base main \
+  --witness canary/multi-provider-witness \
+  --output /path/to/target-repo/.roadmap-canary/issue-1
+```
+
+The resulting Canary artifact contains the approved contract and executable evidence:
+
+```text
+.roadmap-canary/
+  issue-1/
+    contract.yaml
+    witness.patch
+    metadata.json
+    evidence.json
+```
+
+`witness.patch` is a minimal proof, not production feature code.
 
 ## Quick start
 
@@ -82,24 +95,115 @@ export BOB_API_KEY="YOUR_BOB_API_KEY"
 roadmap-canary ui
 ```
 
-The UI accepts a repository in `owner/repo` form. Roadmap Canary clones managed GitHub repositories over HTTPS, so inspecting a public target repository does not require GitHub SSH configuration. Private repositories require suitable HTTPS Git credentials, or you can use the **Use local repository** option.
+The UI accepts a repository in `owner/repo` form. Public target repositories are cloned over HTTPS. Private repositories require suitable Git credentials, or you can use **Use local repository**.
 
-IBM Bob is only invoked when the known future-capability witness no longer works on the selected change and Rescue is required.
+IBM Bob is invoked only when the known witness passes on BASE but no longer works on the selected change.
 
-## Canary artifact
+## Demo
 
-A Canary is a small portable evidence bundle:
+Use the prepared demo repository:
 
 ```text
-.roadmap-canary/
-  issue-1/
-    contract.yaml
-    witness.patch
-    metadata.json
-    evidence.json
+Repository:        kawchar85/roadmap-canary-demo
+Future capability: Multiple payment providers
+Base:              main
 ```
 
-`contract.yaml` is human-approved. `witness.patch` is disposable proof code, not production implementation. `metadata.json` binds the artifact to its hashes and baseline. `evidence.json` records capture or promotion evidence.
+Two prepared changes demonstrate the two important outcomes:
+
+### Demo A: path changed, future preserved
+
+```text
+Change: demo/path-changed-safe
+```
+
+Expected flow:
+
+```text
+BASE witness                 PASS
+PR witness                   FAIL
+IBM Bob Rescue               PASS
+Deterministic verification   PASS
+Result                       PATH CHANGED - SAFE
+```
+
+The original implementation path disappeared, but Bob found another small path that satisfied the same Future Contract and proof budget.
+
+### Demo B: roadmap risk
+
+```text
+Change: demo/roadmap-risk
+```
+
+Expected flow:
+
+```text
+BASE witness                 PASS
+PR witness                   FAIL
+IBM Bob Rescue               candidate produced
+Deterministic verification   FAIL
+Result                       ROADMAP RISK
+```
+
+The candidate can satisfy the functional checks but exceeds the approved proof budget, demonstrating that today's software can remain green while a committed future capability becomes materially more expensive to preserve.
+
+## Result semantics
+
+- **SAFE**: the known executable path still verifies on the proposed change.
+- **PATH CHANGED - SAFE**: the known path disappeared, but Rescue produced another path that passed deterministic verification.
+- **ROADMAP RISK**: the known path disappeared and no Rescue candidate passed the approved deterministic verification within the bounded attempt.
+- **STALE**: the Canary cannot be attributed to the proposed change, for example because the witness already fails on BASE or the Future Contract has expired.
+
+`ROADMAP RISK` does not mean the future capability is impossible. It means the previously demonstrated low-cost path is no longer established under the approved constraints.
+
+## Proof fidelity
+
+Roadmap Canary does not ask an LLM whether a proof "looks realistic." Proof quality is encoded in the human-approved Future Contract through executable tests, protected surfaces, protected tests, verification commands, and explicit proof budgets.
+
+For example, the multi-provider demo does not pass merely because a second class implements an interface. The proof must exercise the real checkout and refund paths while preserving the provider-agnostic architecture.
+
+See `docs/future-contract.md` for the trust boundary and evidence model.
+
+## IBM Bob integration
+
+Roadmap Canary uses IBM Bob Shell in a bounded isolated Rescue worktree. Rescue can be constrained by turns, Bobcoin cost, and wall-clock time. Bob task metadata and the candidate patch are retained as run evidence when available.
+
+See `docs/bob-integration.md` for the integration details.
+
+## CLI
+
+Replay a known witness on BASE and a proposed change:
+
+```bash
+roadmap-canary check-known-path \
+  --repo /path/to/target-repo \
+  --canary /path/to/target-repo/.roadmap-canary/issue-1 \
+  --base main \
+  --pr <change-ref>
+```
+
+Run the full flow with IBM Bob Rescue when required:
+
+```bash
+roadmap-canary check \
+  --repo /path/to/target-repo \
+  --canary /path/to/target-repo/.roadmap-canary/issue-1 \
+  --base main \
+  --pr <change-ref> \
+  --bob-max-turns 30 \
+  --bob-max-cost 1.50 \
+  --bob-timeout 900 \
+  --output-dir ./run-evidence
+```
+
+A successful Rescue does not automatically replace the trusted witness. After human review, promote it explicitly:
+
+```bash
+roadmap-canary promote \
+  --repo /path/to/target-repo \
+  --canary /path/to/target-repo/.roadmap-canary/issue-1 \
+  --run-dir ./run-evidence
+```
 
 ## Development
 
@@ -109,128 +213,3 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 pytest
 ```
-
-Validate a Future Contract:
-
-```bash
-roadmap-canary validate examples/issue-1/contract.yaml
-```
-
-### 1. Capture the initial Canary
-
-Once a witness implementation exists on a separate Git ref, Roadmap Canary derives the patch from BASE to that ref, replays it on a clean BASE worktree, and refuses to create the trusted artifact unless it passes deterministic verification.
-
-```bash
-roadmap-canary capture \
-  --repo /path/to/target-repo \
-  --contract examples/issue-1/contract.yaml \
-  --base main \
-  --witness canary/multi-provider-witness \
-  --output /path/to/.roadmap-canary/issue-1
-```
-
-### 2. Replay the known path on BASE and PR
-
-```bash
-roadmap-canary check-known-path \
-  --repo /path/to/target-repo \
-  --canary /path/to/.roadmap-canary/issue-1 \
-  --base <base-ref> \
-  --pr <pr-ref>
-```
-
-### 3. Run the full flow with IBM Bob Rescue
-
-Keep `BOB_API_KEY` in the local environment; never commit it.
-
-```bash
-roadmap-canary check \
-  --repo /path/to/target-repo \
-  --canary /path/to/.roadmap-canary/issue-1 \
-  --base <base-ref> \
-  --pr <pr-ref> \
-  --bob-max-turns 8 \
-  --bob-max-cost 0.50 \
-  --bob-timeout 600 \
-  --output-dir ./run-evidence
-```
-
-When the old witness still works, no Rescue is needed. When the old witness fails, Bob receives the approved Future Contract and failure evidence, edits only the isolated Rescue worktree, and leaves candidate code for the deterministic verifier.
-
-For deterministic development, a prepared alternate proof can replace Bob:
-
-```bash
-roadmap-canary check \
-  --repo /path/to/target-repo \
-  --canary /path/to/.roadmap-canary/issue-1 \
-  --base <base-ref> \
-  --pr <pr-ref> \
-  --rescue-patch /path/to/alternate-proof.patch \
-  --output-dir ./run-evidence
-```
-
-Add `--json` to check commands for machine-readable output.
-
-### 4. Promote a successful replacement witness
-
-A successful Rescue does **not** automatically mutate the trusted Canary. After human review, explicitly promote it:
-
-```bash
-roadmap-canary promote \
-  --repo /path/to/target-repo \
-  --canary /path/to/.roadmap-canary/issue-1 \
-  --run-dir ./run-evidence
-```
-
-Promotion replays the persisted replacement patch from scratch against the PR state before updating the stored witness and metadata.
-
-## IBM Bob integration
-
-The hackathon integration has been experimentally verified with Bob Shell `2.0.5` using:
-
-- API-key authentication
-- non-interactive `bob run`
-- explicit isolated `--workspace`
-- `agent` mode
-- JSON output
-- bounded `--max-turns`
-- bounded `--max-cost`
-- wall-clock timeout in Roadmap Canary
-- MCP disabled by default
-- subagents disabled by default
-- direct file modification inside a temporary Git repository
-
-Bob task ID, cost, duration, tool-call count, and final message are retained as Rescue metadata when available. See `docs/bob-integration.md` for the verified integration behavior and the handling required for agent-created untracked files.
-
-## Proof Fidelity
-
-Roadmap Canary does not ask an LLM to score whether a proof "looks realistic." Proof Fidelity is expressed as deterministic, human-approved evidence in the Future Contract. For the MVP this includes real integration/contract tests, protected tests that cannot be weakened, proof budgets, and verification commands that exercise the required production path.
-
-For example, a multi-provider witness should not pass merely because a second class implements an interface. The approved evidence should require that the second provider satisfies the shared provider contract and executes through the real checkout path.
-
-See `docs/future-contract.md` for the trust boundary and evidence model.
-
-## Result semantics
-
-- `SAFE`: the known executable path still verifies on the PR.
-- `PATH_CHANGED`: the known path disappeared, but Rescue produced another deterministically verified path. User-facing wording: **PATH CHANGED - SAFE**.
-- `ROADMAP_RISK`: the known path disappeared and no Rescue candidate passed deterministic verification within the bounded attempt.
-- `STALE`: the Canary should not be attributed to the PR, for example because the witness already fails on BASE or the Future Contract has expired.
-
-A `ROADMAP_RISK` result does **not** claim that the future capability is impossible. It means its previously demonstrated viability is no longer established by the configured bounded Rescue process.
-
-## Current demo dependency
-
-The engine is ready to consume the prepared demo repository once its witness and scenario refs are available. The intended demo refs are:
-
-```text
-canary/multi-provider-witness
-demo/path-changed-safe
-demo/roadmap-risk
-```
-
-No demo-specific logic is hard-coded into the engine.
-
-## Design specification
-
-The working design specification is kept temporarily under `docs/design/`. It can be removed once the implementation and final project documentation fully supersede it.
