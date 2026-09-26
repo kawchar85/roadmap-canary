@@ -128,6 +128,36 @@ class KnownPathCheck(StrictModel):
     reason: str
 
 
+class RescueRun(StrictModel):
+    agent: str
+    candidate_produced: bool
+    errors: list[str] = Field(default_factory=list)
+
+
+class RescueResult(StrictModel):
+    attempted: bool
+    agent: str
+    candidate_produced: bool
+    verification: ReplayResult | None = None
+    errors: list[str] = Field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return (
+            self.attempted
+            and self.candidate_produced
+            and self.verification is not None
+            and self.verification.passed
+        )
+
+
+class CanaryCheck(StrictModel):
+    known_path: KnownPathCheck
+    rescue: RescueResult | None = None
+    status: CanaryStatus
+    reason: str
+
+
 class CanaryMetadata(StrictModel):
     canary_id: str
     baseline_commit: str
