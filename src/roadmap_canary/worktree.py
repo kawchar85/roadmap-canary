@@ -29,9 +29,9 @@ def _share_ignored_node_modules(repo: Path, destination: Path) -> None:
     would make verification slow and brittle.
 
     If the target repository already has ``node_modules`` installed and that
-    path is ignored by Git, expose it in the temporary worktree through a
-    directory symlink. The ignored-path check is important: Roadmap Canary must
-    never introduce a synthetic dependency directory into the candidate patch.
+    directory is ignored by Git, expose it in the temporary worktree through a
+    symlink. Internal Git operations explicitly exclude this synthetic symlink
+    from candidate-change detection and staging.
     """
 
     source = repo / "node_modules"
@@ -40,7 +40,7 @@ def _share_ignored_node_modules(repo: Path, destination: Path) -> None:
         return
 
     ignored = subprocess.run(
-        ["git", "-C", str(destination), "check-ignore", "-q", "node_modules"],
+        ["git", "-C", str(destination), "check-ignore", "-q", "node_modules/"],
         text=True,
         capture_output=True,
         check=False,
@@ -71,10 +71,17 @@ def remove_worktree(repo: str | Path, destination: str | Path) -> None:
 
 
 def stage_all_changes(workspace: str | Path) -> None:
-    """Normalize tracked and untracked candidate changes into the worktree index."""
+    """Normalize candidate changes into the index, excluding runtime dependencies."""
 
     workspace_path = Path(workspace).resolve()
-    _run_git(workspace_path, "add", "-A")
+    _run_git(
+        workspace_path,
+        "add",
+        "-A",
+        "--",
+        ".",
+        ":(exclude)node_modules",
+    )
 
 
 def git_diff(workspace: str | Path) -> str:
