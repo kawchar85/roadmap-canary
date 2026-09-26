@@ -14,7 +14,12 @@ from .models import (
 from .replay import replay_witness, verify_candidate_workspace
 from .rescue import RescueAgent
 from .verifier import snapshot_protected_tests
-from .worktree import create_worktree, remove_worktree
+from .worktree import (
+    create_worktree,
+    git_diff,
+    remove_worktree,
+    stage_all_changes,
+)
 
 
 def classify_known_path(
@@ -211,17 +216,22 @@ def check_canary(
                     ),
                 )
 
+            # Normalize agent-created tracked and untracked files before measuring
+            # the candidate and preserving it as a reproducible patch artifact.
+            stage_all_changes(rescue_workspace)
             verification = verify_candidate_workspace(
                 rescue_workspace,
                 artifact.contract,
                 protected_snapshot,
                 timeout_seconds=timeout_seconds,
             )
+            candidate_patch = git_diff(rescue_workspace)
             rescue = RescueResult(
                 attempted=True,
                 agent=agent_run.agent,
                 candidate_produced=True,
                 verification=verification,
+                candidate_patch=candidate_patch,
                 errors=agent_run.errors,
             )
 
