@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from .contracts import contract_hash, load_contract
 from .evaluation import check_canary, check_known_path
 from .models import CanaryStatus
-from .rescue import PatchRescueAgent
+from .rescue import BobRescueAgent, PatchRescueAgent
 from .runs import persist_run
 
 app = typer.Typer(
@@ -76,10 +76,25 @@ def check(
     canary: Path = typer.Option(..., "--canary", help="Canary artifact directory."),
     base: str = typer.Option(..., "--base", help="BASE Git ref or commit."),
     pr: str = typer.Option(..., "--pr", help="PR/head Git ref or commit."),
-    rescue_patch: Path = typer.Option(
-        ...,
+    rescue_patch: Path | None = typer.Option(
+        None,
         "--rescue-patch",
-        help="Prepared alternate proof used by the development Rescue adapter.",
+        help=(
+            "Use a prepared alternate proof instead of IBM Bob. "
+            "Intended for deterministic development/testing."
+        ),
+    ),
+    bob_max_turns: int = typer.Option(
+        8,
+        "--bob-max-turns",
+        min=1,
+        help="Maximum turns for one IBM Bob Rescue attempt.",
+    ),
+    bob_timeout: int = typer.Option(
+        600,
+        "--bob-timeout",
+        min=1,
+        help="Wall-clock timeout in seconds for one IBM Bob Rescue attempt.",
     ),
     output_dir: Path | None = typer.Option(
         None,
@@ -88,7 +103,17 @@ def check(
     ),
     json_output: bool = typer.Option(False, "--json", help="Emit structured JSON."),
 ) -> None:
-    """Run witness replay plus one deterministic development Rescue attempt."""
+    """Run witness replay plus one bounded Rescue attempt.
+
+    IBM Bob is the default Rescue backend. Supplying --rescue-patch switches to
+    the deterministic prepared-patch adapter used by development tests.
+    """
+
+    rescue_agent = (
+        PatchRescueAgent(rescue_patch)
+        if rescue_patch is not None
+        else BobRescueAgent(max_turns=bob_max_turns, timeout_seconds=bob_timeout)
+    )
 
     try:
         result = check_canary(
@@ -96,7 +121,7 @@ def check(
             canary,
             base_ref=base,
             pr_ref=pr,
-            rescue_agent=PatchRescueAgent(rescue_patch),
+            rescue_agent=rescue_agent,
         )
         if output_dir is not None:
             persist_run(result, output_dir)
@@ -118,6 +143,11 @@ def check(
                 "RESCUE: "
                 + ("PASS" if result.rescue.passed else "NO VERIFIED PROOF")
             )
+            typer.echo(f"Agent: {result.rescue.agent}")
+            if result.rescue.cost is not None:
+                typer.echo(f"Bob cost: {result.rescue.cost:.6f}")
+            if result.rescue.task_id is not None:
+                typer.echo(f"Bob task: {result.rescue.task_id}")
         typer.echo("")
         label = (
             "PATH CHANGED - SAFE"
