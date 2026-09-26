@@ -6,8 +6,9 @@ import typer
 from pydantic import ValidationError
 
 from .contracts import contract_hash, load_contract
-from .evaluation import check_known_path
+from .evaluation import check_canary, check_known_path
 from .models import CanaryStatus
+from .rescue import PatchRescueAgent
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -63,6 +64,62 @@ def check_known_path_command(
         typer.echo(result.reason)
 
     if result.rescue_required:
+        raise typer.Exit(code=2)
+    if result.status == CanaryStatus.STALE:
+        raise typer.Exit(code=3)
+
+
+@app.command()
+def check(
+    repo: Path = typer.Option(..., "--repo", help="Target Git repository."),
+    canary: Path = typer.Option(..., "--canary", help="Canary artifact directory."),
+    base: str = typer.Option(..., "--base", help="BASE Git ref or commit."),
+    pr: str = typer.Option(..., "--pr", help="PR/head Git ref or commit."),
+    rescue_patch: Path = typer.Option(
+        ...,
+        "--rescue-patch",
+        help="Prepared alternate proof used by the development Rescue adapter.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit structured JSON."),
+) -> None:
+    """Run witness replay plus one deterministic development Rescue attempt."""
+
+    try:
+        result = check_canary(
+            repo,
+            canary,
+            base_ref=base,
+            pr_ref=pr,
+            rescue_agent=PatchRescueAgent(rescue_patch),
+        )
+    except Exception as exc:
+        typer.echo(f"ENGINE ERROR: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    if json_output:
+        typer.echo(result.model_dump_json(indent=2))
+    else:
+        known = result.known_path
+        typer.echo("ROADMAP CANARY")
+        typer.echo("")
+        typer.echo(f"Capability: {known.canary_id} - {known.feature}")
+        typer.echo(f"BASE: {'PASS' if known.base.passed else 'FAIL'}")
+        typer.echo(f"PR:   {'PASS' if known.pr.passed else 'FAIL'}")
+        if result.rescue is not None:
+            typer.echo(
+                "RESCUE: "
+                + ("PASS" if result.rescue.passed else "NO VERIFIED PROOF")
+            )
+        typer.echo("")
+        label = (
+            "PATH CHANGED - SAFE"
+            if result.status == CanaryStatus.PATH_CHANGED
+            else result.status.value
+        )
+        typer.echo(f"RESULT: {label}")
+        typer.echo(result.reason)
+
+    if result.status == CanaryStatus.ROADMAP_RISK:
         raise typer.Exit(code=2)
     if result.status == CanaryStatus.STALE:
         raise typer.Exit(code=3)
