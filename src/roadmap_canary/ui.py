@@ -69,9 +69,12 @@ def _repository_slug(value: str) -> str | None:
     candidate = value.strip()
     if candidate.endswith(".git"):
         candidate = candidate[:-4]
-    if _REPOSITORY_SLUG.fullmatch(candidate):
-        return candidate
-    return None
+    if not _REPOSITORY_SLUG.fullmatch(candidate):
+        return None
+    owner, name = candidate.split("/", 1)
+    if owner in {".", ".."} or name in {".", ".."}:
+        return None
+    return candidate
 
 
 def _clone_or_fetch(slug: str) -> Path:
