@@ -4,8 +4,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from .artifacts import CanaryArtifact, load_canary_artifact
-from .models import CanaryStatus, KnownPathCheck, ReplayResult
-from .replay import replay_witness
+from .models import (
+    CanaryCheck,
+    CanaryStatus,
+    KnownPathCheck,
+    ReplayResult,
+    RescueResult,
+)
+from .replay import replay_witness, verify_candidate_workspace
+from .rescue import RescueAgent
+from .verifier import snapshot_protected_tests
 from .worktree import create_worktree, remove_worktree
 
 
@@ -139,3 +147,105 @@ def check_known_path(
         base=base_result,
         pr=pr_result,
     )
+
+
+def check_canary(
+    repo: str | Path,
+    canary: str | Path,
+    *,
+    base_ref: str,
+    pr_ref: str,
+    rescue_agent: RescueAgent,
+    timeout_seconds: int = 300,
+) -> CanaryCheck:
+    """Run known-path replay and, when required, one bounded Rescue attempt."""
+
+    known_path = check_known_path(
+        repo,
+        canary,
+        base_ref=base_ref,
+        pr_ref=pr_ref,
+        timeout_seconds=timeout_seconds,
+    )
+
+    if not known_path.rescue_required:
+        status = known_path.status or CanaryStatus.SAFE
+        return CanaryCheck(
+            known_path=known_path,
+            status=status,
+            reason=known_path.reason,
+        )
+
+    repo_path = Path(repo).resolve()
+    artifact = load_canary_artifact(canary)
+
+    with TemporaryDirectory(prefix="roadmap-canary-rescue-") as temporary:
+        rescue_workspace = Path(temporary) / "rescue"
+        create_worktree(repo_path, pr_ref, rescue_workspace)
+        try:
+            protected_snapshot = snapshot_protected_tests(
+                rescue_workspace,
+                artifact.contract,
+            )
+            agent_run = rescue_agent.rescue(
+                rescue_workspace,
+                artifact.contract,
+                known_path.pr,
+            )
+
+            if not agent_run.candidate_produced:
+                rescue = RescueResult(
+                    attempted=True,
+                    agent=agent_run.agent,
+                    candidate_produced=False,
+                    errors=agent_run.errors,
+                )
+                return CanaryCheck(
+                    known_path=known_path,
+                    rescue=rescue,
+                    status=CanaryStatus.ROADMAP_RISK,
+                    reason=(
+                        "The previous demonstrated path was lost and the Rescue attempt "
+                        "did not produce a candidate replacement proof. Viability is no "
+                        "longer demonstrated within this Rescue attempt."
+                    ),
+                )
+
+            verification = verify_candidate_workspace(
+                rescue_workspace,
+                artifact.contract,
+                protected_snapshot,
+                timeout_seconds=timeout_seconds,
+            )
+            rescue = RescueResult(
+                attempted=True,
+                agent=agent_run.agent,
+                candidate_produced=True,
+                verification=verification,
+                errors=agent_run.errors,
+            )
+
+            if rescue.passed:
+                return CanaryCheck(
+                    known_path=known_path,
+                    rescue=rescue,
+                    status=CanaryStatus.PATH_CHANGED,
+                    reason=(
+                        "The previous witness no longer works, but Rescue produced a new "
+                        "candidate that passed deterministic verification. The capability "
+                        "still has a demonstrated viable path."
+                    ),
+                )
+
+            return CanaryCheck(
+                known_path=known_path,
+                rescue=rescue,
+                status=CanaryStatus.ROADMAP_RISK,
+                reason=(
+                    "The previous demonstrated path was lost and the Rescue candidate did "
+                    "not pass deterministic verification. Viability is no longer "
+                    "demonstrated within this Rescue attempt."
+                ),
+            )
+        finally:
+            remove_worktree(repo_path, rescue_workspace)
