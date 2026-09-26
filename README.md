@@ -60,7 +60,8 @@ The core engine includes:
 - Rescue-agent abstraction
 - IBM Bob Shell Rescue adapter
 - bounded Bob turns, Bobcoin cost, and wall-clock time
-- MCP and subagents disabled by default during Rescue
+- MCP disabled by default during Rescue
+- subagents disabled by default during Rescue
 - prepared-patch Rescue adapter for deterministic testing
 - structured `result.json` evidence
 - verified replacement-witness patch persistence
@@ -68,7 +69,7 @@ The core engine includes:
 
 ## Quick start
 
-Each teammate or reviewer should use their own IBM Bob API key. Never commit or share `BOB_API_KEY`.
+To enable IBM Bob Rescue, set an IBM Bob API key in your environment. Keep API keys out of source control.
 
 ```bash
 git clone git@github.com:kawchar85/roadmap-canary.git
@@ -76,7 +77,7 @@ cd roadmap-canary
 
 pip install -e '.[dev]'
 
-export BOB_API_KEY="THEIR_OWN_KEY"
+export BOB_API_KEY="YOUR_BOB_API_KEY"
 
 roadmap-canary ui
 ```
