@@ -9,6 +9,7 @@ from .capture import CaptureError, capture_canary
 from .contracts import contract_hash, load_contract
 from .evaluation import check_canary, check_known_path
 from .models import CanaryStatus
+from .promote import PromotionError, promote_verified_rescue
 from .rescue import BobRescueAgent, PatchRescueAgent
 from .runs import persist_run
 
@@ -62,6 +63,25 @@ def capture(
     typer.echo(f"witness: {artifact_dir / 'witness.patch'}")
     typer.echo(f"metadata: {artifact_dir / 'metadata.json'}")
     typer.echo(f"evidence: {artifact_dir / 'evidence.json'}")
+
+
+@app.command()
+def promote(
+    repo: Path = typer.Option(..., "--repo", help="Target Git repository."),
+    canary: Path = typer.Option(..., "--canary", help="Existing Canary artifact directory."),
+    run_dir: Path = typer.Option(..., "--run-dir", help="Evidence directory from a successful PATH_CHANGED run."),
+) -> None:
+    """Explicitly promote a verified Rescue patch as the new stored witness."""
+
+    try:
+        promoted = promote_verified_rescue(repo, canary, run_dir)
+    except (OSError, ValueError, ValidationError, PromotionError) as exc:
+        typer.echo(f"PROMOTION FAILED: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo("CANARY WITNESS PROMOTED")
+    typer.echo(f"artifact: {promoted}")
+    typer.echo("The replacement proof was re-verified before the trusted witness changed.")
 
 
 @app.command("check-known-path")
