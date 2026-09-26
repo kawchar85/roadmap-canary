@@ -20,6 +20,37 @@ def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def _share_ignored_node_modules(repo: Path, destination: Path) -> None:
+    """Reuse installed Node dependencies without polluting the candidate diff.
+
+    Git worktrees do not copy untracked directories such as ``node_modules``.
+    Roadmap Canary often verifies JavaScript/TypeScript repositories in several
+    temporary worktrees, so requiring a fresh network install for every replay
+    would make verification slow and brittle.
+
+    If the target repository already has ``node_modules`` installed and that
+    path is ignored by Git, expose it in the temporary worktree through a
+    directory symlink. The ignored-path check is important: Roadmap Canary must
+    never introduce a synthetic dependency directory into the candidate patch.
+    """
+
+    source = repo / "node_modules"
+    target = destination / "node_modules"
+    if not source.is_dir() or target.exists() or target.is_symlink():
+        return
+
+    ignored = subprocess.run(
+        ["git", "-C", str(destination), "check-ignore", "-q", "node_modules"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if ignored.returncode != 0:
+        return
+
+    target.symlink_to(source, target_is_directory=True)
+
+
 def create_worktree(repo: str | Path, ref: str, destination: str | Path) -> Path:
     repo_path = Path(repo).resolve()
     destination_path = Path(destination).resolve()
@@ -29,6 +60,7 @@ def create_worktree(repo: str | Path, ref: str, destination: str | Path) -> Path
 
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     _run_git(repo_path, "worktree", "add", "--detach", str(destination_path), ref)
+    _share_ignored_node_modules(repo_path, destination_path)
     return destination_path
 
 
