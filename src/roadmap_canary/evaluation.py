@@ -214,16 +214,25 @@ def check_canary(
     pr_ref: str,
     rescue_agent: RescueAgent,
     timeout_seconds: int = 300,
+    known_path: KnownPathCheck | None = None,
 ) -> CanaryCheck:
-    """Run known-path replay and, when required, one bounded Rescue attempt."""
+    """Run known-path replay and, when required, one bounded Rescue attempt.
 
-    known_path = check_known_path(
-        repo,
-        canary,
-        base_ref=base_ref,
-        pr_ref=pr_ref,
-        timeout_seconds=timeout_seconds,
-    )
+    ``known_path`` may be supplied by callers that already replayed BASE and PR,
+    such as the web UI. This avoids repeating the same deterministic work before
+    Rescue while preserving the original behavior for CLI and other callers.
+    """
+
+    if known_path is None:
+        known_path = check_known_path(
+            repo,
+            canary,
+            base_ref=base_ref,
+            pr_ref=pr_ref,
+            timeout_seconds=timeout_seconds,
+        )
+    elif known_path.base_ref != base_ref or known_path.pr_ref != pr_ref:
+        raise ValueError("known_path refs do not match the requested BASE/PR refs")
 
     if not known_path.rescue_required:
         status = known_path.status or CanaryStatus.SAFE
@@ -235,6 +244,8 @@ def check_canary(
 
     repo_path = Path(repo).resolve()
     artifact = load_canary_artifact(canary)
+    if artifact.contract.id != known_path.canary_id:
+        raise ValueError("known_path does not belong to the selected Canary")
 
     with TemporaryDirectory(prefix="roadmap-canary-rescue-") as temporary:
         rescue_workspace = Path(temporary) / "rescue"
