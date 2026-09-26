@@ -42,6 +42,7 @@ protected_tests:
 
 verification:
   commands:
+    - npm install --ignore-scripts --no-audit --no-fund --no-package-lock
     - npm test
     - npm run typecheck
     - npx vitest run --config vitest.canary.config.ts
