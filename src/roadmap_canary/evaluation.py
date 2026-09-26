@@ -217,7 +217,8 @@ def check_canary(
                 )
 
             # Normalize agent-created tracked and untracked files before measuring
-            # the candidate and preserving it as a reproducible patch artifact.
+            # the candidate. Verification may create additional files, so normalize
+            # once more before preserving the final replacement patch.
             stage_all_changes(rescue_workspace)
             verification = verify_candidate_workspace(
                 rescue_workspace,
@@ -225,6 +226,7 @@ def check_canary(
                 protected_snapshot,
                 timeout_seconds=timeout_seconds,
             )
+            stage_all_changes(rescue_workspace)
             candidate_patch = git_diff(rescue_workspace)
             rescue = RescueResult(
                 attempted=True,
