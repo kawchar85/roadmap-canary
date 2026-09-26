@@ -152,6 +152,7 @@ REQUIRED WORKING RULES
 - Produce the smallest credible executable proof satisfying the contract.
 - Use real production paths required by the contract; do not bypass them with isolated fake logic.
 - Preserve existing behavior.
+- Inspect the protected tests and any dedicated Canary verifier to understand the required executable evidence, but do not modify them.
 - Do not weaken, delete, or rewrite approved acceptance/contract tests merely to make the proof pass.
 - Do not replace production components with mocks unless the Future Contract explicitly allows it.
 - Do not make unrelated refactors.
@@ -220,8 +221,20 @@ When finished, respond briefly with what you changed. The external verifier, not
 
     @staticmethod
     def _workspace_has_changes(workspace: Path) -> tuple[bool, str | None]:
+        # ``node_modules`` can be a synthetic symlink created by Roadmap Canary
+        # so isolated JS/TS worktrees can reuse dependencies installed in the
+        # target repository. It is runtime infrastructure, never a Bob proposal.
         status = subprocess.run(
-            ["git", "-C", str(workspace), "status", "--porcelain"],
+            [
+                "git",
+                "-C",
+                str(workspace),
+                "status",
+                "--porcelain",
+                "--",
+                ".",
+                ":(exclude)node_modules",
+            ],
             text=True,
             capture_output=True,
             check=False,
