@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
@@ -21,7 +22,7 @@ class CanaryStatus(StrEnum):
 class Commitment(StrictModel):
     state: str = "committed"
     target: str | None = None
-    expires: str | None = None
+    expires: date | None = None
     blocking_policy: Literal["advisory", "blocking"] = "advisory"
 
 
