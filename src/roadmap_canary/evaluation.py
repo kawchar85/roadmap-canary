@@ -154,6 +154,28 @@ def check_known_path(
     )
 
 
+def _rescue_result_from_agent_run(
+    agent_run,
+    *,
+    candidate_produced: bool,
+    verification: ReplayResult | None = None,
+    candidate_patch: str | None = None,
+) -> RescueResult:
+    return RescueResult(
+        attempted=True,
+        agent=agent_run.agent,
+        candidate_produced=candidate_produced,
+        verification=verification,
+        candidate_patch=candidate_patch,
+        task_id=agent_run.task_id,
+        duration_ms=agent_run.duration_ms,
+        cost=agent_run.cost,
+        tool_calls=agent_run.tool_calls,
+        last_message=agent_run.last_message,
+        errors=agent_run.errors,
+    )
+
+
 def check_canary(
     repo: str | Path,
     canary: str | Path,
@@ -199,11 +221,9 @@ def check_canary(
             )
 
             if not agent_run.candidate_produced:
-                rescue = RescueResult(
-                    attempted=True,
-                    agent=agent_run.agent,
+                rescue = _rescue_result_from_agent_run(
+                    agent_run,
                     candidate_produced=False,
-                    errors=agent_run.errors,
                 )
                 return CanaryCheck(
                     known_path=known_path,
@@ -228,13 +248,11 @@ def check_canary(
             )
             stage_all_changes(rescue_workspace)
             candidate_patch = git_diff(rescue_workspace)
-            rescue = RescueResult(
-                attempted=True,
-                agent=agent_run.agent,
+            rescue = _rescue_result_from_agent_run(
+                agent_run,
                 candidate_produced=True,
                 verification=verification,
                 candidate_patch=candidate_patch,
-                errors=agent_run.errors,
             )
 
             if rescue.passed:
