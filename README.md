@@ -66,6 +66,25 @@ The core engine includes:
 - verified replacement-witness patch persistence
 - explicit human-triggered promotion of a successful replacement witness
 
+## Quick start
+
+Each teammate or reviewer should use their own IBM Bob API key. Never commit or share `BOB_API_KEY`.
+
+```bash
+git clone git@github.com:kawchar85/roadmap-canary.git
+cd roadmap-canary
+
+pip install -e '.[dev]'
+
+export BOB_API_KEY="THEIR_OWN_KEY"
+
+roadmap-canary ui
+```
+
+The UI accepts a repository in `owner/repo` form. Roadmap Canary clones managed GitHub repositories over HTTPS, so inspecting a public target repository does not require GitHub SSH configuration. Private repositories require suitable HTTPS Git credentials, or you can use the **Use local repository** option.
+
+IBM Bob is only invoked when the known future-capability witness no longer works on the selected change and Rescue is required.
+
 ## Canary artifact
 
 A Canary is a small portable evidence bundle:
