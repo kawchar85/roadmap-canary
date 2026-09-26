@@ -139,6 +139,7 @@ class RescueResult(StrictModel):
     agent: str
     candidate_produced: bool
     verification: ReplayResult | None = None
+    candidate_patch: str | None = None
     errors: list[str] = Field(default_factory=list)
 
     @property
