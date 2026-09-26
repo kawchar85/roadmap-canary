@@ -81,16 +81,51 @@ class CommandResult(StrictModel):
         return self.exit_code == 0
 
 
+class DiffStats(StrictModel):
+    files_changed: int = Field(ge=0)
+    added_lines: int = Field(ge=0)
+    removed_lines: int = Field(ge=0)
+    new_dependencies: int = Field(ge=0)
+    changed_paths: list[str] = Field(default_factory=list)
+
+
+class BudgetResult(StrictModel):
+    passed: bool
+    stats: DiffStats
+    violations: list[str] = Field(default_factory=list)
+
+
 class ReplayResult(StrictModel):
     workspace: Path
     patch_applied: bool
     verification_passed: bool
     commands: list[CommandResult] = Field(default_factory=list)
+    protected_tests_unchanged: bool = True
+    changed_protected_tests: list[str] = Field(default_factory=list)
+    budget: BudgetResult | None = None
     errors: list[str] = Field(default_factory=list)
 
     @property
     def passed(self) -> bool:
-        return self.patch_applied and self.verification_passed
+        budget_passed = self.budget is None or self.budget.passed
+        return (
+            self.patch_applied
+            and self.verification_passed
+            and self.protected_tests_unchanged
+            and budget_passed
+        )
+
+
+class KnownPathCheck(StrictModel):
+    canary_id: str
+    feature: str
+    base_ref: str
+    pr_ref: str
+    base: ReplayResult
+    pr: ReplayResult
+    status: CanaryStatus | None = None
+    rescue_required: bool
+    reason: str
 
 
 class CanaryMetadata(StrictModel):
