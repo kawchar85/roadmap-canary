@@ -131,6 +131,11 @@ class KnownPathCheck(StrictModel):
 class RescueRun(StrictModel):
     agent: str
     candidate_produced: bool
+    task_id: str | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    cost: float | None = Field(default=None, ge=0)
+    tool_calls: int | None = Field(default=None, ge=0)
+    last_message: str | None = None
     errors: list[str] = Field(default_factory=list)
 
 
@@ -140,6 +145,11 @@ class RescueResult(StrictModel):
     candidate_produced: bool
     verification: ReplayResult | None = None
     candidate_patch: str | None = None
+    task_id: str | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    cost: float | None = Field(default=None, ge=0)
+    tool_calls: int | None = Field(default=None, ge=0)
+    last_message: str | None = None
     errors: list[str] = Field(default_factory=list)
 
     @property
