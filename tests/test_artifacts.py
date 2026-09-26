@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from roadmap_canary.artifacts import load_canary_artifact, sha256_file
+from roadmap_canary.contracts import contract_hash, load_contract
 
 
 CONTRACT = """
@@ -21,14 +22,15 @@ proof_budget:
 
 
 def test_load_canary_artifact(tmp_path: Path) -> None:
-    (tmp_path / "contract.yaml").write_text(CONTRACT, encoding="utf-8")
+    contract_path = tmp_path / "contract.yaml"
+    contract_path.write_text(CONTRACT, encoding="utf-8")
     (tmp_path / "witness.patch").write_text("demo patch", encoding="utf-8")
     witness_hash = sha256_file(tmp_path / "witness.patch")
 
     metadata = {
         "canary_id": "issue-1",
         "baseline_commit": "abc123",
-        "contract_hash": "placeholder",
+        "contract_hash": contract_hash(load_contract(contract_path)),
         "witness_hash": witness_hash,
     }
     (tmp_path / "metadata.json").write_text(
