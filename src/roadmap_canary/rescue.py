@@ -104,16 +104,24 @@ class BobRescueAgent:
         *,
         bob_binary: str = "bob",
         max_turns: int = 8,
+        max_cost: float = 0.50,
         timeout_seconds: int = 600,
+        disable_mcp: bool = True,
+        disable_subagents: bool = True,
     ) -> None:
         if max_turns < 1:
             raise ValueError("max_turns must be at least 1")
+        if max_cost <= 0:
+            raise ValueError("max_cost must be greater than 0")
         if timeout_seconds < 1:
             raise ValueError("timeout_seconds must be at least 1")
 
         self.bob_binary = bob_binary
         self.max_turns = max_turns
+        self.max_cost = max_cost
         self.timeout_seconds = timeout_seconds
+        self.disable_mcp = disable_mcp
+        self.disable_subagents = disable_subagents
 
     def _build_prompt(
         self,
@@ -158,25 +166,35 @@ PROTECTED TESTS
 When finished, respond briefly with what you changed. The external verifier, not you, determines whether the Rescue succeeded.
 """
 
+    def _build_command(self, workspace: Path, prompt: str) -> list[str]:
+        command = [
+            self.bob_binary,
+            "run",
+            "--workspace",
+            str(workspace),
+            "--mode",
+            "agent",
+            "--format",
+            "json",
+            "--max-turns",
+            str(self.max_turns),
+            "--max-cost",
+            str(self.max_cost),
+        ]
+        if self.disable_mcp:
+            command.append("--disable-mcp")
+        if self.disable_subagents:
+            command.append("--disable-subagents")
+        command.append(prompt)
+        return command
+
     def _invoke_bob(
         self,
         workspace: Path,
         prompt: str,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [
-                self.bob_binary,
-                "run",
-                "--workspace",
-                str(workspace),
-                "--mode",
-                "agent",
-                "--format",
-                "json",
-                "--max-turns",
-                str(self.max_turns),
-                prompt,
-            ],
+            self._build_command(workspace, prompt),
             text=True,
             capture_output=True,
             check=False,
