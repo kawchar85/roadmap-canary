@@ -35,7 +35,7 @@ def sha256_file(path: str | Path) -> str:
 
 
 def load_canary_artifact(path: str | Path) -> CanaryArtifact:
-    root = Path(path)
+    root = Path(path).resolve()
     contract_path = root / "contract.yaml"
     witness_path = root / "witness.patch"
     metadata_path = root / "metadata.json"
@@ -51,9 +51,17 @@ def load_canary_artifact(path: str | Path) -> CanaryArtifact:
             json.loads(metadata_path.read_text(encoding="utf-8"))
         )
 
-    return CanaryArtifact(
+    artifact = CanaryArtifact(
         root=root,
         contract=load_contract(contract_path),
         witness_path=witness_path,
         metadata=metadata,
     )
+
+    if metadata is not None:
+        if metadata.contract_hash != artifact.contract_digest:
+            raise ValueError("Canary metadata contract hash does not match contract.yaml")
+        if metadata.witness_hash != artifact.witness_digest:
+            raise ValueError("Canary metadata witness hash does not match witness.patch")
+
+    return artifact
