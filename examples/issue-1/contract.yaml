@@ -19,16 +19,16 @@ must_prove:
   - RefundService remains provider-agnostic.
 
 must_not:
-  - Modify approved acceptance tests.
+  - Modify approved acceptance tests or the independent Canary verifier.
   - Bypass PaymentService.
   - Replace production services with mocks.
   - Add provider-specific branching to CheckoutService.
 
 protected_surfaces:
   paths:
-    - src/payment/**
+    - src/payments/**
     - src/checkout/**
-    - src/refund/**
+    - src/refunds/**
   symbols:
     - PaymentService
     - PaymentProvider
@@ -38,13 +38,15 @@ protected_surfaces:
 protected_tests:
   - tests/checkout.integration.test.ts
   - tests/refund.integration.test.ts
+  - canary-tests/multi-provider.test.ts
 
 verification:
   commands:
     - npm test
     - npm run typecheck
+    - npx vitest run --config vitest.canary.config.ts
 
 proof_budget:
-  max_files_changed: 6
+  max_files_changed: 4
   max_added_lines: 120
   max_new_dependencies: 0
