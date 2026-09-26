@@ -5,6 +5,7 @@ from pathlib import Path
 import typer
 from pydantic import ValidationError
 
+from .capture import CaptureError, capture_canary
 from .contracts import contract_hash, load_contract
 from .evaluation import check_canary, check_known_path
 from .models import CanaryStatus
@@ -31,6 +32,36 @@ def validate(contract: Path) -> None:
     typer.echo(f"id: {parsed.id}")
     typer.echo(f"feature: {parsed.feature}")
     typer.echo(f"contract_sha256: {contract_hash(parsed)}")
+
+
+@app.command()
+def capture(
+    repo: Path = typer.Option(..., "--repo", help="Target Git repository."),
+    contract: Path = typer.Option(..., "--contract", help="Approved Future Contract YAML."),
+    base: str = typer.Option(..., "--base", help="BASE Git ref or commit."),
+    witness: str = typer.Option(..., "--witness", help="Git ref containing the verified witness implementation."),
+    output: Path = typer.Option(..., "--output", help="Directory to create for the Canary artifact."),
+) -> None:
+    """Capture and verify a witness branch as a portable Canary artifact."""
+
+    try:
+        artifact_dir = capture_canary(
+            repo,
+            contract,
+            base_ref=base,
+            witness_ref=witness,
+            output_dir=output,
+        )
+    except (OSError, ValueError, ValidationError, CaptureError) as exc:
+        typer.echo(f"CAPTURE FAILED: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo("CANARY CAPTURED")
+    typer.echo(f"artifact: {artifact_dir}")
+    typer.echo(f"contract: {artifact_dir / 'contract.yaml'}")
+    typer.echo(f"witness: {artifact_dir / 'witness.patch'}")
+    typer.echo(f"metadata: {artifact_dir / 'metadata.json'}")
+    typer.echo(f"evidence: {artifact_dir / 'evidence.json'}")
 
 
 @app.command("check-known-path")
