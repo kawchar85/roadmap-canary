@@ -9,6 +9,7 @@ from .contracts import contract_hash, load_contract
 from .evaluation import check_canary, check_known_path
 from .models import CanaryStatus
 from .rescue import PatchRescueAgent
+from .runs import persist_run
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -80,6 +81,11 @@ def check(
         "--rescue-patch",
         help="Prepared alternate proof used by the development Rescue adapter.",
     ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output-dir",
+        help="Write result.json and any replacement witness patch here.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Emit structured JSON."),
 ) -> None:
     """Run witness replay plus one deterministic development Rescue attempt."""
@@ -92,6 +98,8 @@ def check(
             pr_ref=pr,
             rescue_agent=PatchRescueAgent(rescue_patch),
         )
+        if output_dir is not None:
+            persist_run(result, output_dir)
     except Exception as exc:
         typer.echo(f"ENGINE ERROR: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -118,6 +126,8 @@ def check(
         )
         typer.echo(f"RESULT: {label}")
         typer.echo(result.reason)
+        if output_dir is not None:
+            typer.echo(f"Evidence: {output_dir.resolve()}")
 
     if result.status == CanaryStatus.ROADMAP_RISK:
         raise typer.Exit(code=2)
