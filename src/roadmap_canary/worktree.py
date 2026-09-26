@@ -30,8 +30,8 @@ def _share_ignored_node_modules(repo: Path, destination: Path) -> None:
 
     If the target repository already has ``node_modules`` installed and that
     directory is ignored by Git, expose it in the temporary worktree through a
-    symlink. Internal Git operations explicitly exclude this synthetic symlink
-    from candidate-change detection and staging.
+    symlink. The synthetic symlink is runtime infrastructure only and is removed
+    temporarily whenever candidate changes are staged.
     """
 
     source = repo / "node_modules"
@@ -71,17 +71,29 @@ def remove_worktree(repo: str | Path, destination: str | Path) -> None:
 
 
 def stage_all_changes(workspace: str | Path) -> None:
-    """Normalize candidate changes into the index while respecting .gitignore.
+    """Normalize candidate changes while excluding synthetic runtime symlinks.
 
-    Runtime dependencies such as ``node_modules`` are intentionally ignored by
-    the target repository. A plain ``git add -A .`` stages tracked and untracked
-    candidate changes while leaving ignored runtime files alone. Explicitly
-    mentioning an ignored path in the pathspec can make Git fail after an agent
-    runs a package install, so do not name ``node_modules`` here.
+    ``node_modules`` is normally ignored when it is a directory, but the shared
+    worktree copy is a symlink. Git therefore may not match a ``node_modules/``
+    ignore rule and can stage the symlink itself. Temporarily remove only that
+    synthetic symlink while running ``git add -A`` and restore it afterwards.
+    Real ignored ``node_modules`` directories continue to use normal .gitignore
+    semantics.
     """
 
     workspace_path = Path(workspace).resolve()
-    _run_git(workspace_path, "add", "-A", "--", ".")
+    node_modules = workspace_path / "node_modules"
+    shared_target: str | None = None
+
+    if node_modules.is_symlink():
+        shared_target = str(node_modules.readlink())
+        node_modules.unlink()
+
+    try:
+        _run_git(workspace_path, "add", "-A", "--", ".")
+    finally:
+        if shared_target is not None and not node_modules.exists() and not node_modules.is_symlink():
+            node_modules.symlink_to(shared_target, target_is_directory=True)
 
 
 def git_diff(workspace: str | Path) -> str:
