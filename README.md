@@ -29,7 +29,7 @@ BASE replay ---- PR replay
 
 ## Current implementation
 
-The deterministic core is now working and covered by CI:
+The core engine now includes:
 
 - strict Future Contract parsing and hashing
 - canary artifact integrity checks
@@ -42,11 +42,17 @@ The deterministic core is now working and covered by CI:
 - BASE/PR classification
 - `SAFE`, `STALE`, and Rescue-required states
 - Rescue-agent abstraction
-- prepared-patch Rescue adapter for engine testing
+- IBM Bob Shell Rescue adapter
+- prepared-patch Rescue adapter for deterministic testing
 - deterministic `PATH_CHANGED` and `ROADMAP_RISK` end-to-end flows
-- JSON-serializable result models
+- structured `result.json` evidence
+- verified replacement-witness patch persistence
 
-IBM Bob will replace the prepared-patch Rescue adapter once the Bob integration spike is complete. The verifier remains independent from Bob.
+The central invariant is:
+
+> **Bob proposes. Roadmap Canary verifies.**
+
+IBM Bob may inspect the repository and create a candidate replacement proof inside an isolated Rescue worktree. Bob never decides the final Roadmap Canary status. Tests, protected-file checks, proof budgets, and other deterministic evidence decide whether the candidate verifies.
 
 ## Development
 
@@ -73,7 +79,21 @@ roadmap-canary check-known-path \
   --pr <pr-ref>
 ```
 
-For development, run one prepared Rescue patch through the same deterministic verifier:
+Run the full flow with IBM Bob Rescue:
+
+```bash
+export BOB_API_KEY="..."
+
+roadmap-canary check \
+  --repo /path/to/target-repo \
+  --canary /path/to/.roadmap-canary/issue-1 \
+  --base <base-ref> \
+  --pr <pr-ref> \
+  --bob-max-turns 8 \
+  --output-dir ./run-evidence
+```
+
+For deterministic development, a prepared alternate proof can replace Bob:
 
 ```bash
 roadmap-canary check \
@@ -85,6 +105,20 @@ roadmap-canary check \
 ```
 
 Add `--json` to the check commands for machine-readable output.
+
+## IBM Bob integration
+
+The hackathon integration has been experimentally verified with Bob Shell `2.0.5` using:
+
+- API-key authentication
+- non-interactive `bob run`
+- explicit `--workspace`
+- `agent` mode
+- JSON output
+- bounded `--max-turns`
+- direct file modification inside a temporary Git repository
+
+See `docs/bob-integration.md` for the verified integration behavior and the important handling required for agent-created untracked files.
 
 ## Result semantics
 
