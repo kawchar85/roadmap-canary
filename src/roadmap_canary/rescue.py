@@ -131,6 +131,9 @@ class BobRescueAgent:
         protected_tests = "\n".join(
             f"- {path}" for path in contract.protected_tests
         ) or "- none configured"
+        verification_commands = "\n".join(
+            f"- {command}" for command in contract.verification.commands
+        )
 
         return f"""You are performing a Roadmap Canary Rescue inside an isolated Git worktree.
 
@@ -153,18 +156,25 @@ REQUIRED WORKING RULES
 - Use real production paths required by the contract; do not bypass them with isolated fake logic.
 - Preserve existing behavior.
 - Inspect the protected tests and any dedicated Canary verifier to understand the required executable evidence, but do not modify them.
+- Create any disposable proof wiring/support files needed by that verifier, as long as they stay within the proof budget and do not weaken production code or tests.
 - Do not weaken, delete, or rewrite approved acceptance/contract tests merely to make the proof pass.
 - Do not replace production components with mocks unless the Future Contract explicitly allows it.
 - Do not make unrelated refactors.
 - Stay within the Future Contract proof budget.
 - Do not commit any changes.
-- If the capability can be demonstrated, leave the candidate implementation in the workspace for external verification.
+- BEFORE FINISHING, run every configured verification command below from the workspace.
+- If a verification command fails, diagnose the failure, update the candidate, and rerun the commands. Do not stop after writing only part of the proof.
+- Treat the candidate as complete only when all configured verification commands pass, or when you determine you cannot satisfy them within the contract constraints.
+- If the capability can be demonstrated, leave the complete candidate implementation in the workspace for external verification.
 - If you cannot produce a credible candidate within the constraints, do not create unrelated placeholder changes.
 
 PROTECTED TESTS
 {protected_tests}
 
-When finished, respond briefly with what you changed. The external verifier, not you, determines whether the Rescue succeeded.
+VERIFICATION COMMANDS
+{verification_commands}
+
+When finished, respond briefly with what you changed and which verification commands you ran. The external verifier, not you, determines whether the Rescue succeeded.
 """
 
     def _build_command(self, workspace: Path, prompt: str) -> list[str]:
