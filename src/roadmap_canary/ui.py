@@ -92,6 +92,10 @@ def _clone_or_fetch(slug: str) -> Path:
         )
         if process.returncode != 0:
             raise ValueError(process.stderr.strip() or process.stdout.strip())
+        # This checkout is Roadmap Canary-managed cache, not the user's working tree.
+        # Keep it aligned with the remote default branch so newly committed Canary
+        # artifacts are visible immediately after Sync repository.
+        _git(destination, "reset", "--hard", "origin/HEAD")
         return destination.resolve()
 
     process = subprocess.run(
