@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -42,6 +43,7 @@ class RunRequest(BaseModel):
 
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
+_REPOSITORY_SLUG = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -54,6 +56,71 @@ def _git(repo: Path, *args: str) -> str:
     if process.returncode != 0:
         raise ValueError(process.stderr.strip() or process.stdout.strip())
     return process.stdout.strip()
+
+
+def _repo_cache_root() -> Path:
+    configured = os.environ.get("ROADMAP_CANARY_REPO_CACHE")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return (Path.home() / ".roadmap-canary" / "repos").resolve()
+
+
+def _repository_slug(value: str) -> str | None:
+    candidate = value.strip()
+    if candidate.endswith(".git"):
+        candidate = candidate[:-4]
+    if _REPOSITORY_SLUG.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def _clone_or_fetch(slug: str) -> Path:
+    owner, name = slug.split("/", 1)
+    destination = _repo_cache_root() / owner / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    if destination.is_dir():
+        _git(destination, "rev-parse", "--git-dir")
+        process = subprocess.run(
+            ["git", "-C", str(destination), "fetch", "--prune", "origin"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if process.returncode != 0:
+            raise ValueError(process.stderr.strip() or process.stdout.strip())
+        return destination.resolve()
+
+    process = subprocess.run(
+        [
+            "git",
+            "clone",
+            f"git@github.com:{slug}.git",
+            str(destination),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if process.returncode != 0:
+        raise ValueError(process.stderr.strip() or process.stdout.strip())
+    return destination.resolve()
+
+
+def _prepare_repo(value: str) -> tuple[Path, str, str]:
+    raw = value.strip()
+    if not raw:
+        raise ValueError("Enter a repository as owner/name or a local path")
+
+    slug = _repository_slug(raw)
+    if slug is not None:
+        return _clone_or_fetch(slug), slug, "github"
+
+    repo = Path(raw).expanduser().resolve()
+    if not repo.is_dir():
+        raise ValueError(f"Repository directory does not exist: {repo}")
+    _git(repo, "rev-parse", "--git-dir")
+    return repo, repo.name, "local"
 
 
 def _resolve_repo(value: str) -> Path:
@@ -91,6 +158,7 @@ def _bob_status() -> dict[str, Any]:
         "binary": binary,
         "version": version,
         "api_key_configured": bool(os.environ.get("BOB_API_KEY")),
+        "ready": binary is not None and bool(os.environ.get("BOB_API_KEY")),
     }
 
 
@@ -108,6 +176,8 @@ def _canary_summary(path: Path) -> dict[str, Any] | None:
         "blocking_policy": contract.commitment.blocking_policy,
         "proof_budget": contract.proof_budget.model_dump(mode="json"),
         "must_prove": contract.must_prove,
+        "must_not": contract.must_not,
+        "protected_tests": contract.protected_tests,
     }
 
 
@@ -144,6 +214,9 @@ def _discover_saved_runs(repo: Path) -> list[dict[str, Any]]:
                 "status": data.get("status"),
                 "feature": known.get("feature"),
                 "pr_ref": known.get("pr_ref"),
+                "created_at": datetime.fromtimestamp(
+                    result_path.stat().st_mtime, tz=timezone.utc
+                ).isoformat(),
             }
         )
     return runs[:20]
@@ -161,10 +234,16 @@ def _refs(repo: Path) -> list[str]:
     return sorted(dict.fromkeys(refs))
 
 
+def _display_ref(ref: str | None) -> str | None:
+    if ref is None:
+        return None
+    return ref.removeprefix("origin/")
+
+
 def _steps() -> list[dict[str, str]]:
     return [
-        {"key": "base", "label": "Replay witness on BASE", "status": "running"},
-        {"key": "pr", "label": "Replay witness on PR", "status": "running"},
+        {"key": "base", "label": "BASE witness", "status": "running"},
+        {"key": "pr", "label": "PR witness", "status": "running"},
         {"key": "rescue", "label": "IBM Bob Rescue", "status": "waiting"},
         {"key": "verify", "label": "Deterministic verification", "status": "waiting"},
     ]
@@ -210,6 +289,8 @@ def _result_summary(data: dict[str, Any]) -> dict[str, Any]:
         "feature": known.get("feature"),
         "base_ref": known.get("base_ref"),
         "pr_ref": known.get("pr_ref"),
+        "base_display_ref": _display_ref(known.get("base_ref")),
+        "pr_display_ref": _display_ref(known.get("pr_ref")),
         "base_passed": (known.get("base") or {}).get("verification_passed")
         and (known.get("base") or {}).get("patch_applied"),
         "pr_passed": (known.get("pr") or {}).get("verification_passed")
@@ -222,7 +303,7 @@ def _result_summary(data: dict[str, Any]) -> dict[str, Any]:
                 and verification
                 and verification.get("verification_passed")
                 and verification.get("protected_tests_unchanged", True)
-                and (budget.get("passed", True))
+                and budget.get("passed", True)
             ),
             "agent": rescue.get("agent"),
             "cost": rescue.get("cost"),
@@ -230,6 +311,7 @@ def _result_summary(data: dict[str, Any]) -> dict[str, Any]:
             "tool_calls": rescue.get("tool_calls"),
             "last_message": rescue.get("last_message"),
             "errors": rescue.get("errors", []),
+            "candidate_patch": rescue.get("candidate_patch"),
         },
         "verification": {
             "passed": verification.get("verification_passed"),
@@ -270,13 +352,7 @@ def _execute_run(job_id: str, request: RunRequest) -> None:
 
         if known.rescue_required:
             _update_step(job_id, "rescue", "running")
-            _update_job(
-                job_id,
-                phase=(
-                    "IBM Bob is searching for the smallest replacement proof. "
-                    "Roadmap Canary will verify it independently."
-                ),
-            )
+            _update_job(job_id, phase="IBM Bob is searching for a replacement path")
         else:
             _update_step(job_id, "rescue", "skipped")
 
@@ -295,7 +371,10 @@ def _execute_run(job_id: str, request: RunRequest) -> None:
         if result.rescue is None:
             _update_step(job_id, "verify", "skipped")
         else:
-            _update_step(job_id, "rescue", "pass" if result.rescue.passed else "fail")
+            if result.rescue.candidate_produced:
+                _update_step(job_id, "rescue", "pass")
+            else:
+                _update_step(job_id, "rescue", "fail")
             if result.rescue.verification is None:
                 _update_step(job_id, "verify", "skipped")
             else:
@@ -348,14 +427,17 @@ def create_app() -> FastAPI:
     @app.post("/api/inspect")
     def inspect_repo(request: InspectRequest) -> dict[str, Any]:
         try:
-            repo = _resolve_repo(request.repo)
+            repo, display_name, source = _prepare_repo(request.repo)
             current_branch = _git(repo, "branch", "--show-current") or "detached"
             return {
-                "repo": str(repo),
+                "repo": display_name,
+                "local_path": str(repo),
+                "source": source,
                 "current_branch": current_branch,
                 "refs": _refs(repo),
                 "canaries": _discover_canaries(repo),
                 "saved_runs": _discover_saved_runs(repo),
+                "synced_at": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
