@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -7,6 +8,7 @@ from .artifacts import CanaryArtifact, load_canary_artifact
 from .models import (
     CanaryCheck,
     CanaryStatus,
+    FutureContract,
     KnownPathCheck,
     ReplayResult,
     RescueResult,
@@ -20,6 +22,20 @@ from .worktree import (
     remove_worktree,
     stage_all_changes,
 )
+
+
+def lifecycle_stale_reason(
+    contract: FutureContract,
+    *,
+    today: date | None = None,
+) -> str | None:
+    """Return a deterministic lifecycle reason when a Canary is no longer active."""
+
+    expires = contract.commitment.expires
+    current = today or date.today()
+    if expires is not None and expires < current:
+        return f"Future Contract expired on {expires.isoformat()}."
+    return None
 
 
 def classify_known_path(
@@ -142,6 +158,20 @@ def check_known_path(
             root / "pr",
             artifact,
             timeout_seconds=timeout_seconds,
+        )
+
+    stale_reason = lifecycle_stale_reason(artifact.contract)
+    if stale_reason is not None:
+        return KnownPathCheck(
+            canary_id=artifact.contract.id,
+            feature=artifact.contract.feature,
+            base_ref=base_ref,
+            pr_ref=pr_ref,
+            base=base_result,
+            pr=pr_result,
+            status=CanaryStatus.STALE,
+            rescue_required=False,
+            reason=stale_reason + " The Canary must be reviewed or renewed before PR attribution.",
         )
 
     return classify_known_path(
