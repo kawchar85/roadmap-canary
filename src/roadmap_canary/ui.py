@@ -364,6 +364,7 @@ def _execute_run(job_id: str, request: RunRequest) -> None:
                 max_cost=request.bob_max_cost,
                 timeout_seconds=request.bob_timeout,
             ),
+            known_path=known,
         )
 
         if result.rescue is None:
@@ -416,7 +417,17 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
         index_path = Path(__file__).with_name("static") / "index.html"
-        return HTMLResponse(index_path.read_text(encoding="utf-8"))
+        html = index_path.read_text(encoding="utf-8")
+        collapse_advanced = """
+<script>
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll("details.advanced").forEach((details) => {
+      details.open = false;
+    });
+  });
+</script>
+"""
+        return HTMLResponse(html.replace("</body>", collapse_advanced + "</body>"))
 
     @app.get("/api/system")
     def system_status() -> dict[str, Any]:
