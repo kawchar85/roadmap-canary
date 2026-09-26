@@ -99,7 +99,7 @@ def _clone_or_fetch(slug: str) -> Path:
         return destination.resolve()
 
     process = subprocess.run(
-        ["git", "clone", f"git@github.com:{slug}.git", str(destination)],
+        ["git", "clone", f"https://github.com/{slug}.git", str(destination)],
         text=True,
         capture_output=True,
         check=False,
