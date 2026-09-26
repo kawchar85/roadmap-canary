@@ -3,7 +3,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from roadmap_canary.worktree import create_worktree, remove_worktree
+from roadmap_canary.worktree import (
+    create_worktree,
+    git_diff,
+    remove_worktree,
+    stage_all_changes,
+)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -15,7 +20,9 @@ def _git(repo: Path, *args: str) -> None:
     )
 
 
-def test_create_worktree_shares_ignored_node_modules(tmp_path: Path) -> None:
+def test_create_worktree_shares_ignored_node_modules_without_diff_noise(
+    tmp_path: Path,
+) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-b", "main")
@@ -35,12 +42,10 @@ def test_create_worktree_shares_ignored_node_modules(tmp_path: Path) -> None:
         shared = created / "node_modules"
         assert shared.is_symlink()
         assert (shared / "marker.txt").read_text(encoding="utf-8") == "installed\n"
-        status = subprocess.run(
-            ["git", "-C", str(created), "status", "--porcelain"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        assert status.stdout == ""
+
+        # The symlink is runtime infrastructure only. Normalizing candidate
+        # changes must not stage or preserve it as part of a Rescue patch.
+        stage_all_changes(created)
+        assert git_diff(created) == ""
     finally:
         remove_worktree(repo, destination)
