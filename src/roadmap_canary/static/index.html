@@ -107,7 +107,7 @@
     .evidence-row { display:grid; grid-template-columns:1fr auto; gap:20px; padding:9px 2px; border-bottom:1px solid var(--border-soft); }
     .evidence-row .value { font-weight:600; text-align:right; }
     .ok { color:var(--safe); } .no { color:#ff7b72; } .muted { color:var(--muted); }
-    .violation { margin-top:10px; border-left:2px solid var(--danger); padding:7px 10px; color:#ffa198; background:rgba(248,81,73,.06); font-size:12px; }
+    .violation { margin-top:10px; border-left:2px solid var(--danger); padding:7px 10px; color:#ffa198; background:rgba(248,81,73,.06); font-size:12px; white-space:pre-wrap; }
     .result-actions { display:flex; gap:14px; margin-top:24px; }
 
     .drawer-backdrop,.modal-backdrop { position:fixed; inset:0; background:rgba(1,4,9,.66); display:none; z-index:40; }
@@ -278,6 +278,7 @@
   let systemData = null;
   let currentJob = null;
   let currentSummary = null;
+  let currentRawResult = null;
   let currentEvidenceDir = null;
   let localMode = false;
 
@@ -405,9 +406,21 @@
     }
   }
 
-  function renderPipeline(steps) {
+  function pipelineLabel(step) {
+    return step.key === "pr" || step.label === "PR witness" ? "Change witness" : step.label;
+  }
+
+  function pipelineState(step) {
+    if (step.key === "rescue" || step.label === "IBM Bob Rescue") {
+      const rescueText = {pass:"✓ Candidate produced", fail:"✕ No candidate", running:"● Running", waiting:"Waiting", skipped:"Skipped"};
+      return rescueText[step.status] || step.status;
+    }
     const text = {pass:"✓ Passed", fail:"✕ Failed", running:"● Running", waiting:"Waiting", skipped:"Skipped"};
-    $("pipeline").innerHTML = (steps || []).map(step => `<div class="step" data-status="${escapeHtml(step.status)}"><div class="step-label">${escapeHtml(step.label)}</div><div class="step-state">${escapeHtml(text[step.status] || step.status)}</div></div>`).join("");
+    return text[step.status] || step.status;
+  }
+
+  function renderPipeline(steps) {
+    $("pipeline").innerHTML = (steps || []).map(step => `<div class="step" data-status="${escapeHtml(step.status)}"><div class="step-label">${escapeHtml(pipelineLabel(step))}</div><div class="step-state">${escapeHtml(pipelineState(step))}</div></div>`).join("");
   }
 
   function commandLabel(command) {
@@ -417,15 +430,50 @@
     return command;
   }
 
+  function replayPassed(replay) {
+    if (!replay) return false;
+    const budgetPassed = !replay.budget || replay.budget.passed !== false;
+    return replay.patch_applied === true && replay.verification_passed === true && replay.protected_tests_unchanged !== false && budgetPassed;
+  }
+
+  function replayFailureDetails(label, replay) {
+    if (!replay || replayPassed(replay)) return "";
+    const details = [];
+    if (replay.patch_applied === false) details.push("Witness patch did not apply.");
+    for (const error of replay.errors || []) details.push(String(error));
+    const failed = (replay.commands || []).find(command => Number(command.exit_code) !== 0);
+    if (failed) {
+      let message = `${failed.command || "Verification command"} exited ${failed.exit_code}.`;
+      const output = String(failed.stderr || failed.stdout || "").trim().slice(0, 700);
+      if (output) message += `\n${output}`;
+      details.push(message);
+    }
+    if (replay.protected_tests_unchanged === false) details.push("Protected tests changed.");
+    for (const violation of replay.budget?.violations || []) details.push(String(violation));
+    if (!details.length) details.push("The stored witness did not verify on this code state.");
+    return `<div class="violation"><strong>${escapeHtml(label)}</strong><br>${details.map(escapeHtml).join("\n")}</div>`;
+  }
+
+  function renderKnownPathEvidence(rawResult) {
+    const known = rawResult?.known_path;
+    if (!known?.base || !known?.pr) return "";
+    let html = '<h2>Known path replay</h2>';
+    html += `<div class="evidence-row"><span>BASE witness</span><span class="value ${replayPassed(known.base) ? "ok" : "no"}">${replayPassed(known.base) ? "✓ Passed" : "✕ Failed"}</span></div>`;
+    html += `<div class="evidence-row"><span>Change witness</span><span class="value ${replayPassed(known.pr) ? "ok" : "no"}">${replayPassed(known.pr) ? "✓ Passed" : "✕ Failed"}</span></div>`;
+    html += replayFailureDetails("BASE failure", known.base);
+    html += replayFailureDetails("Change failure", known.pr);
+    return html;
+  }
+
   function renderEvidence(summary) {
     const rescue = summary.rescue || {};
     const verification = summary.verification || {};
     const budget = verification.budget || {};
     const canary = repoData?.canaries?.find(item => item.id === summary.canary_id) || {};
     const limits = canary.proof_budget || {};
-    let html = "";
+    let html = renderKnownPathEvidence(currentRawResult);
     if (rescue.attempted) {
-      html += '<h2>Verification</h2>';
+      html += '<h2>Rescue verification</h2>';
       for (const command of verification.commands || []) html += `<div class="evidence-row"><span>${escapeHtml(commandLabel(command.command))}</span><span class="value ${command.passed ? "ok" : "no"}">${command.passed ? "✓ Passed" : "✕ Failed"}</span></div>`;
       html += `<div class="evidence-row"><span>Protected tests</span><span class="value ${verification.protected_tests_unchanged === false ? "no" : "ok"}">${verification.protected_tests_unchanged === false ? "✕ Changed" : "✓ Unchanged"}</span></div>`;
     }
@@ -440,16 +488,18 @@
     $("evidence").innerHTML = html;
   }
 
-  function showResult(summary, evidenceDir, steps = null) {
-    currentSummary = summary; currentEvidenceDir = evidenceDir;
+  function showResult(summary, evidenceDir, steps = null, rawResult = null) {
+    currentSummary = summary;
+    currentRawResult = rawResult;
+    currentEvidenceDir = evidenceDir;
     $("setupView").style.display = "none"; $("analysisView").style.display = "block";
     $("analysisTitle").textContent = summary.feature || "Future capability";
     $("analysisSubtitle").textContent = `${summary.pr_display_ref || cleanRef(summary.pr_ref)} · base ${summary.base_display_ref || cleanRef(summary.base_ref)}`;
     if (steps) renderPipeline(steps); else renderPipeline([
-      {label:"BASE witness",status:summary.base_passed ? "pass" : "fail"},
-      {label:"PR witness",status:summary.pr_passed ? "pass" : "fail"},
-      {label:"IBM Bob Rescue",status:summary.rescue?.attempted ? summary.rescue?.candidate_produced ? "pass" : "fail" : "skipped"},
-      {label:"Deterministic verification",status:summary.rescue?.attempted ? summary.rescue?.passed ? "pass" : "fail" : "skipped"}
+      {key:"base",label:"BASE witness",status:summary.base_passed ? "pass" : "fail"},
+      {key:"pr",label:"Change witness",status:summary.pr_passed ? "pass" : "fail"},
+      {key:"rescue",label:"IBM Bob Rescue",status:summary.rescue?.attempted ? summary.rescue?.candidate_produced ? "pass" : "fail" : "skipped"},
+      {key:"verify",label:"Deterministic verification",status:summary.rescue?.attempted ? summary.rescue?.passed ? "pass" : "fail" : "skipped"}
     ]);
     $("verdictName").textContent = summary.status_label || statusLabel(summary.status);
     $("verdictName").className = `verdict-name ${statusClass(summary.status)}`;
@@ -464,7 +514,7 @@
   async function loadSavedRun(run) {
     try {
       const data = await api("/api/load-result", {method:"POST", body:JSON.stringify({repo:repoData.local_path, result_path:run.path})});
-      showResult(data.summary, data.evidence_dir); window.scrollTo({top:0, behavior:"smooth"});
+      showResult(data.summary, data.evidence_dir, null, data.result); window.scrollTo({top:0, behavior:"smooth"});
     } catch (error) { $("formError").textContent = error.message; }
   }
 
@@ -479,7 +529,8 @@
     $("phase").textContent = "Preparing isolated worktrees.";
     $("runState").textContent = "RUNNING"; $("runState").className = "status muted";
     $("evidence").innerHTML = ""; $("resultActions").style.display = "none";
-    renderPipeline([{label:"BASE witness",status:"running"},{label:"PR witness",status:"running"},{label:"IBM Bob Rescue",status:"waiting"},{label:"Deterministic verification",status:"waiting"}]);
+    currentRawResult = null;
+    renderPipeline([{key:"base",label:"BASE witness",status:"running"},{key:"pr",label:"Change witness",status:"running"},{key:"rescue",label:"IBM Bob Rescue",status:"waiting"},{key:"verify",label:"Deterministic verification",status:"waiting"}]);
     try {
       const started = await api("/api/runs", {method:"POST", body:JSON.stringify({repo:repoData.local_path, canary:$("canary").value, base:$("base").value, pr:$("pr").value, bob_max_turns:Number($("turns").value), bob_max_cost:Number($("cost").value), bob_timeout:Number($("timeout").value)})});
       currentJob = started.job_id; pollJob();
@@ -495,7 +546,7 @@
     try {
       const job = await api(`/api/runs/${currentJob}`);
       renderPipeline(job.steps); $("phase").textContent = job.phase || "Running";
-      if (job.status === "completed") { currentJob = null; showResult(job.summary, job.evidence_dir, job.steps); return; }
+      if (job.status === "completed") { currentJob = null; showResult(job.summary, job.evidence_dir, job.steps, job.result); return; }
       if (job.status === "error") {
         currentJob = null; $("runState").textContent = "FAILED"; $("runState").className = "status risk";
         $("verdictName").textContent = "ENGINE ERROR"; $("verdictName").className = "verdict-name risk";
@@ -516,7 +567,7 @@
   $("backToSetup").addEventListener("click", () => { $("analysisView").style.display = "none"; $("setupView").style.display = "block"; window.scrollTo({top:0, behavior:"smooth"}); });
   $("bobStatus").addEventListener("click", () => $("bobBackdrop").classList.add("open"));
   $("viewDiff").addEventListener("click", () => showContent("Candidate diff", currentSummary?.rescue?.candidate_patch));
-  $("viewEvidence").addEventListener("click", () => showContent("Run evidence", `Evidence directory: ${currentEvidenceDir || "—"}\n\n${JSON.stringify(currentSummary,null,2)}`));
+  $("viewEvidence").addEventListener("click", () => showContent("Run evidence", `Evidence directory: ${currentEvidenceDir || "—"}\n\n${JSON.stringify(currentRawResult || currentSummary,null,2)}`));
   document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => $(button.dataset.close).classList.remove("open")));
   document.querySelectorAll(".drawer-backdrop,.modal-backdrop").forEach(backdrop => backdrop.addEventListener("click", e => { if (e.target === backdrop) backdrop.classList.remove("open"); }));
   window.addEventListener("pageshow", () => { $("bobLimits").open = false; });
