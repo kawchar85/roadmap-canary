@@ -54,3 +54,31 @@ def test_create_worktree_shares_ignored_node_modules_without_diff_noise(
         assert stats.changed_paths == []
     finally:
         remove_worktree(repo, destination)
+
+
+def test_stage_all_changes_ignores_installed_node_modules(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Roadmap Canary Test")
+
+    (repo / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    (repo / "README.md").write_text("demo\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore", "README.md")
+    _git(repo, "commit", "-m", "baseline")
+
+    # Simulate Bob or a verification command running npm install directly in
+    # the Rescue workspace before Roadmap Canary normalizes the candidate.
+    (repo / "node_modules").mkdir()
+    (repo / "node_modules" / "runtime.js").write_text("runtime\n", encoding="utf-8")
+    (repo / "candidate.ts").write_text("export const candidate = true;\n", encoding="utf-8")
+
+    stage_all_changes(repo)
+
+    diff = git_diff(repo)
+    assert "candidate.ts" in diff
+    assert "node_modules" not in diff
+    stats = measure_diff(repo)
+    assert stats.changed_paths == ["candidate.ts"]
+    assert stats.files_changed == 1
