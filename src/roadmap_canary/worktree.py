@@ -71,17 +71,17 @@ def remove_worktree(repo: str | Path, destination: str | Path) -> None:
 
 
 def stage_all_changes(workspace: str | Path) -> None:
-    """Normalize candidate changes into the index, excluding runtime dependencies."""
+    """Normalize candidate changes into the index while respecting .gitignore.
+
+    Runtime dependencies such as ``node_modules`` are intentionally ignored by
+    the target repository. A plain ``git add -A .`` stages tracked and untracked
+    candidate changes while leaving ignored runtime files alone. Explicitly
+    mentioning an ignored path in the pathspec can make Git fail after an agent
+    runs a package install, so do not name ``node_modules`` here.
+    """
 
     workspace_path = Path(workspace).resolve()
-    _run_git(
-        workspace_path,
-        "add",
-        "-A",
-        "--",
-        ".",
-        ":(exclude)node_modules",
-    )
+    _run_git(workspace_path, "add", "-A", "--", ".")
 
 
 def git_diff(workspace: str | Path) -> str:
