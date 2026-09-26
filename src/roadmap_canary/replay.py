@@ -42,26 +42,20 @@ def _apply_patch(workspace: Path, witness_patch: Path) -> tuple[bool, str | None
     return True, None
 
 
-def replay_witness(
+def verify_candidate_workspace(
     workspace: str | Path,
-    witness_patch: str | Path,
     contract: FutureContract,
+    protected_snapshot: dict[str, str | None],
     *,
     timeout_seconds: int = 300,
 ) -> ReplayResult:
+    """Verify code already materialized in an isolated workspace.
+
+    This is used after a Rescue agent proposes candidate code. The external
+    verifier, not the agent, decides whether the candidate counts as evidence.
+    """
+
     workspace_path = Path(workspace).resolve()
-    witness_path = Path(witness_patch).resolve()
-    protected_snapshot = snapshot_protected_tests(workspace_path, contract)
-
-    applied, error = _apply_patch(workspace_path, witness_path)
-    if not applied:
-        return ReplayResult(
-            workspace=workspace_path,
-            patch_applied=False,
-            verification_passed=False,
-            errors=[error or "Witness patch could not be applied"],
-        )
-
     command_results = run_verification_commands(
         workspace_path,
         contract,
@@ -93,4 +87,32 @@ def replay_witness(
         changed_protected_tests=sorted(changed_tests),
         budget=budget,
         errors=errors,
+    )
+
+
+def replay_witness(
+    workspace: str | Path,
+    witness_patch: str | Path,
+    contract: FutureContract,
+    *,
+    timeout_seconds: int = 300,
+) -> ReplayResult:
+    workspace_path = Path(workspace).resolve()
+    witness_path = Path(witness_patch).resolve()
+    protected_snapshot = snapshot_protected_tests(workspace_path, contract)
+
+    applied, error = _apply_patch(workspace_path, witness_path)
+    if not applied:
+        return ReplayResult(
+            workspace=workspace_path,
+            patch_applied=False,
+            verification_passed=False,
+            errors=[error or "Witness patch could not be applied"],
+        )
+
+    return verify_candidate_workspace(
+        workspace_path,
+        contract,
+        protected_snapshot,
+        timeout_seconds=timeout_seconds,
     )
