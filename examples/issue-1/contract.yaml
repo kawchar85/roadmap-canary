@@ -1,0 +1,50 @@
+version: 1
+id: issue-1
+feature: multiple-payment-providers
+
+source:
+  type: github_issue
+  repository: kawchar85/roadmap-canary-demo
+  issue: 1
+
+commitment:
+  state: committed
+  target: hackathon-demo
+  blocking_policy: advisory
+
+must_prove:
+  - At least two interchangeable payment providers satisfy the shared provider contract.
+  - The second provider executes through the real CheckoutService -> PaymentService path.
+  - CheckoutService remains provider-agnostic.
+  - RefundService remains provider-agnostic.
+
+must_not:
+  - Modify approved acceptance tests.
+  - Bypass PaymentService.
+  - Replace production services with mocks.
+  - Add provider-specific branching to CheckoutService.
+
+protected_surfaces:
+  paths:
+    - src/payment/**
+    - src/checkout/**
+    - src/refund/**
+  symbols:
+    - PaymentService
+    - PaymentProvider
+    - CheckoutService
+    - RefundService
+
+protected_tests:
+  - tests/checkout.integration.test.ts
+  - tests/refund.integration.test.ts
+
+verification:
+  commands:
+    - npm test
+    - npm run typecheck
+
+proof_budget:
+  max_files_changed: 6
+  max_added_lines: 120
+  max_new_dependencies: 0

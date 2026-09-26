@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "roadmap-canary"
+version = "0.1.0"
+description = "Executable viability checks for accepted future software capabilities"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.8,<3",
+  "PyYAML>=6.0,<7",
+  "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9",
+]
+
+[project.scripts]
+roadmap-canary = "roadmap_canary.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/roadmap_canary"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
