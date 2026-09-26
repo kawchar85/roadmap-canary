@@ -226,5 +226,30 @@ def check(
         raise typer.Exit(code=3)
 
 
+@app.command()
+def ui(
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Interface to bind. Keep 127.0.0.1 for local-only access.",
+    ),
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+    no_open: bool = typer.Option(False, "--no-open", help="Do not open a browser automatically."),
+) -> None:
+    """Launch the local Roadmap Canary web interface."""
+
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    url = f"http://{host}:{port}"
+    typer.echo(f"ROADMAP CANARY UI: {url}")
+    typer.echo("Press Ctrl+C to stop.")
+    if not no_open and host in {"127.0.0.1", "localhost"}:
+        threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+    uvicorn.run("roadmap_canary.ui:app", host=host, port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     app()

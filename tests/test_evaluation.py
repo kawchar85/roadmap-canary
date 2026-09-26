@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from roadmap_canary.evaluation import check_known_path, classify_known_path
+from roadmap_canary.evaluation import check_canary, check_known_path, classify_known_path
 from roadmap_canary.models import CanaryStatus, ReplayResult
 
 
@@ -41,6 +41,34 @@ def test_classification_marks_stale_when_base_already_fails(tmp_path: Path) -> N
 
     assert result.status == CanaryStatus.STALE
     assert not result.rescue_required
+
+
+def test_check_canary_reuses_supplied_known_path(monkeypatch, tmp_path: Path) -> None:
+    known = classify_known_path(
+        canary_id="issue-1",
+        feature="future-feature",
+        base_ref="base",
+        pr_ref="pr",
+        base=_result(tmp_path / "base", True),
+        pr=_result(tmp_path / "pr", True),
+    )
+
+    def unexpected_replay(*args, **kwargs):
+        raise AssertionError("known path should not be replayed")
+
+    monkeypatch.setattr("roadmap_canary.evaluation.check_known_path", unexpected_replay)
+
+    result = check_canary(
+        tmp_path,
+        tmp_path / "unused-canary",
+        base_ref="base",
+        pr_ref="pr",
+        rescue_agent=object(),
+        known_path=known,
+    )
+
+    assert result.status == CanaryStatus.SAFE
+    assert result.known_path is known
 
 
 def _git(repo: Path, *args: str) -> str:

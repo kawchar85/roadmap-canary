@@ -1,6 +1,6 @@
 version: 1
 id: issue-1
-feature: multiple-payment-providers
+feature: Multiple payment providers
 
 source:
   type: github_issue

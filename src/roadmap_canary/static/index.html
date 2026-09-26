@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roadmap Canary</title>
+  <style>
+    :root {
+      --bg:#0d1117; --surface:#161b22; --border:#30363d; --border-soft:#21262d;
+      --text:#f0f6fc; --muted:#8b949e; --accent:#2f81f7; --accent-hover:#388bfd;
+      --safe:#3fb950; --danger:#f85149; --warning:#d29922; --radius:7px;
+    }
+    * { box-sizing:border-box; }
+    html { color-scheme:dark; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; }
+    button,input,select { font:inherit; }
+    button { cursor:pointer; }
+    code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+
+    .topbar { height:56px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20; background:rgba(13,17,23,.96); backdrop-filter:blur(8px); }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em; }
+    .brand-mark { width:26px; height:26px; display:grid; place-items:center; border:1px solid var(--border); border-radius:6px; color:var(--accent); font-weight:800; font-size:13px; background:var(--surface); }
+    .integrations { display:flex; align-items:center; gap:8px; }
+    .integration { border:1px solid transparent; background:transparent; color:var(--muted); border-radius:6px; padding:6px 9px; display:inline-flex; align-items:center; gap:7px; font-size:12px; }
+    .integration:hover { background:var(--surface); border-color:var(--border-soft); }
+    .dot { width:7px; height:7px; border-radius:50%; background:#6e7681; flex:0 0 auto; }
+    .dot.good { background:var(--safe); } .dot.bad { background:var(--danger); } .dot.warn { background:var(--warning); }
+
+    .container { width:min(920px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .page-head { margin-bottom:28px; }
+    .page-head h1 { font-size:24px; margin:0 0 5px; letter-spacing:-.025em; }
+    .page-head p { margin:0; color:var(--muted); max-width:680px; }
+    .section { border-top:1px solid var(--border); padding:24px 0; }
+    .section:first-of-type { border-top:0; padding-top:0; }
+    .section-title { font-size:13px; font-weight:650; margin-bottom:12px; }
+
+    .field { margin-bottom:18px; }
+    .field:last-child { margin-bottom:0; }
+    label { display:block; margin-bottom:7px; font-size:12px; font-weight:600; color:#c9d1d9; }
+    input,select { width:100%; height:40px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); padding:0 11px; outline:none; }
+    input:focus,select:focus { border-color:#1f6feb; box-shadow:0 0 0 3px rgba(31,111,235,.18); }
+    input::placeholder { color:#6e7681; }
+    select:disabled,input:disabled { opacity:.6; cursor:not-allowed; }
+    .field-help { color:var(--muted); font-size:11px; margin-top:6px; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+    .repo-connect { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; }
+    .repo-connect .btn { height:40px; }
+    .repo-meta { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:7px; min-height:18px; }
+    .repo-state { display:none; color:var(--muted); font-size:11px; align-items:center; gap:8px; }
+    .repo-state.visible { display:flex; }
+
+    .btn { height:36px; border:1px solid var(--border); border-radius:6px; padding:0 13px; background:#21262d; color:var(--text); font-weight:600; font-size:12px; }
+    .btn:hover { background:#292e36; border-color:#8b949e; }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .btn.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    .btn.link { border:0; background:transparent; color:#58a6ff; padding:0; height:auto; }
+    .btn.link:hover { background:transparent; text-decoration:underline; }
+
+    .capability-summary { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:13px 14px; margin-top:10px; }
+    .capability-top { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
+    .capability-name { font-weight:650; }
+    .meta { color:var(--muted); font-size:11px; margin-top:3px; }
+    .budget { color:#c9d1d9; font-size:12px; margin-top:10px; }
+    .budget strong { font-weight:600; }
+
+    details.advanced { border-top:1px solid var(--border-soft); margin-top:20px; padding-top:13px; }
+    details.advanced summary { color:var(--muted); font-size:12px; cursor:pointer; }
+    .advanced-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px; }
+    .actions { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; }
+    .error { color:#ff7b72; font-size:12px; margin-top:10px; white-space:pre-wrap; }
+
+    .runs { width:100%; border-collapse:collapse; }
+    .runs th,.runs td { padding:10px 8px; border-bottom:1px solid var(--border-soft); text-align:left; }
+    .runs th { color:var(--muted); font-size:11px; font-weight:600; }
+    .runs td { font-size:12px; }
+    .runs tr[data-path] { cursor:pointer; }
+    .runs tr[data-path]:hover td { background:rgba(177,186,196,.04); }
+    .empty { color:var(--muted); padding:16px 0; font-size:12px; }
+    .status { font-weight:650; font-size:11px; }
+    .status.safe { color:var(--safe); } .status.risk { color:#ff7b72; } .status.stale { color:var(--warning); }
+
+    #analysisView { display:none; }
+    .analysis-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:26px; }
+    .analysis-head h1 { font-size:22px; margin:0 0 4px; }
+    .analysis-head p { color:var(--muted); margin:0; font-size:12px; }
+    .pipeline { border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+    .step { display:grid; grid-template-columns:1fr auto; gap:20px; padding:12px 2px; border-bottom:1px solid var(--border-soft); align-items:center; }
+    .step:last-child { border-bottom:0; }
+    .step-label { font-weight:550; }
+    .step-state { font-size:12px; font-weight:650; }
+    .step[data-status="pass"] .step-state { color:var(--safe); }
+    .step[data-status="fail"] .step-state { color:#ff7b72; }
+    .step[data-status="running"] .step-state { color:#58a6ff; }
+    .step[data-status="waiting"] .step-state,.step[data-status="skipped"] .step-state { color:var(--muted); }
+
+    .verdict-block { padding:28px 0 20px; }
+    .verdict-name { font-size:26px; font-weight:700; letter-spacing:-.025em; margin-bottom:8px; }
+    .verdict-name.safe { color:var(--safe); } .verdict-name.risk { color:#ff7b72; } .verdict-name.stale { color:var(--warning); }
+    .verdict-reason { color:#c9d1d9; max-width:720px; }
+    .phase { color:var(--muted); font-size:11px; margin-top:7px; }
+    .evidence { margin-top:8px; }
+    .evidence h2 { font-size:14px; margin:24px 0 8px; }
+    .evidence-row { display:grid; grid-template-columns:1fr auto; gap:20px; padding:9px 2px; border-bottom:1px solid var(--border-soft); }
+    .evidence-row .value { font-weight:600; text-align:right; }
+    .ok { color:var(--safe); } .no { color:#ff7b72; } .muted { color:var(--muted); }
+    .violation { margin-top:10px; border-left:2px solid var(--danger); padding:7px 10px; color:#ffa198; background:rgba(248,81,73,.06); font-size:12px; }
+    .result-actions { display:flex; gap:14px; margin-top:24px; }
+
+    .drawer-backdrop,.modal-backdrop { position:fixed; inset:0; background:rgba(1,4,9,.66); display:none; z-index:40; }
+    .drawer-backdrop.open,.modal-backdrop.open { display:block; }
+    .drawer { position:absolute; right:0; top:0; height:100%; width:min(520px,94vw); background:var(--surface); border-left:1px solid var(--border); padding:22px; overflow:auto; }
+    .drawer-head,.modal-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:20px; }
+    .drawer-head h2,.modal-head h2 { font-size:16px; margin:0; }
+    .icon-btn { border:0; background:transparent; color:var(--muted); padding:5px; font-size:18px; }
+    .contract-section { margin:22px 0; }
+    .contract-section h3 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 8px; }
+    .contract-section ul { padding-left:18px; margin:0; }
+    .contract-section li { margin:7px 0; color:#c9d1d9; }
+    .modal { position:absolute; left:50%; top:8vh; transform:translateX(-50%); width:min(780px,94vw); max-height:84vh; overflow:auto; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; }
+    .modal pre { margin:0; padding:14px; background:var(--bg); border:1px solid var(--border-soft); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+    .bob-grid { display:grid; grid-template-columns:150px 1fr; gap:9px 16px; font-size:12px; }
+    .bob-grid div:nth-child(odd) { color:var(--muted); }
+
+    @media (max-width:700px) {
+      .topbar { padding:0 14px; }
+      .container { width:min(100% - 24px,920px); padding-top:26px; }
+      .row,.advanced-grid,.repo-connect { grid-template-columns:1fr; }
+      .repo-connect .btn { width:max-content; }
+      .repo-meta { align-items:flex-start; flex-direction:column; gap:5px; }
+      .integrations .integration span.label { display:none; }
+      .capability-top,.analysis-head { flex-direction:column; }
+      .runs th:nth-child(2),.runs td:nth-child(2) { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">RC</span><span>Roadmap Canary</span></div>
+    <div class="integrations">
+      <button class="integration" id="githubStatus" type="button" title="Repository connection"><span class="dot" id="githubDot"></span><span class="label">GitHub</span><span id="githubText">—</span></button>
+      <button class="integration" id="bobStatus" type="button" title="IBM Bob status"><span class="dot" id="bobDot"></span><span class="label">IBM Bob</span><span id="bobText">Checking</span></button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="setupView">
+      <div class="page-head">
+        <h1>Analyze roadmap impact</h1>
+        <p>Check whether a code change still leaves a viable path to a committed future capability.</p>
+      </div>
+
+      <section class="section">
+        <label for="repo">Repository</label>
+        <div class="repo-connect">
+          <input id="repo" value="kawchar85/roadmap-canary-demo" placeholder="owner/repository" autocomplete="off" />
+          <button class="btn" id="inspect" type="button">Connect repository</button>
+        </div>
+        <div class="repo-meta">
+          <div class="repo-state" id="repoState"><span class="dot good"></span><span id="repoStateText"></span></div>
+          <button class="btn link" id="toggleLocal" type="button">Use local repository</button>
+        </div>
+        <div class="error" id="formError"></div>
+      </section>
+
+      <section class="section" id="analysisFormSection" style="display:none">
+        <div class="field">
+          <label for="canary">Capability</label>
+          <select id="canary" disabled><option value="">No Canary loaded</option></select>
+          <div id="contractBox"></div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="base">Base</label>
+            <select id="base" disabled><option value="">main</option></select>
+          </div>
+          <div class="field">
+            <label for="pr">Change</label>
+            <select id="pr" disabled><option value="">Select a branch</option></select>
+            <div class="field-help">Select the incoming branch or PR ref to evaluate.</div>
+          </div>
+        </div>
+
+        <details class="advanced" id="bobLimits">
+          <summary>Bob Rescue limits</summary>
+          <div class="advanced-grid">
+            <div class="field"><label for="turns">Max turns</label><input id="turns" type="number" min="1" value="30" /></div>
+            <div class="field"><label for="cost">Max Bobcoins</label><input id="cost" type="number" min="0.001" step="0.05" value="1.50" /></div>
+            <div class="field"><label for="timeout">Timeout (seconds)</label><input id="timeout" type="number" min="1" value="900" /></div>
+          </div>
+        </details>
+
+        <div class="actions"><button class="btn primary" id="analyze" type="button" disabled>Analyze roadmap impact</button></div>
+      </section>
+
+      <section class="section" id="runsSection" style="display:none">
+        <div class="section-title">Recent runs</div>
+        <div id="runsTable"></div>
+      </section>
+    </div>
+
+    <div id="analysisView">
+      <div class="analysis-head">
+        <div>
+          <button class="btn link" id="backToSetup" type="button">← Analyze another change</button>
+          <h1 id="analysisTitle" style="margin-top:12px">Future capability</h1>
+          <p id="analysisSubtitle">Preparing analysis</p>
+        </div>
+        <span class="status muted" id="runState">RUNNING</span>
+      </div>
+      <div class="pipeline" id="pipeline"></div>
+      <div class="verdict-block">
+        <div class="verdict-name" id="verdictName">ANALYZING</div>
+        <div class="verdict-reason" id="verdictReason">Replaying executable evidence against the selected change.</div>
+        <div class="phase" id="phase">Preparing isolated worktrees.</div>
+      </div>
+      <div class="evidence" id="evidence"></div>
+      <div class="result-actions" id="resultActions" style="display:none">
+        <button class="btn" id="viewDiff" type="button">View candidate diff</button>
+        <button class="btn" id="viewEvidence" type="button">View evidence</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="drawer-backdrop" id="contractBackdrop">
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="contractTitle">
+      <div class="drawer-head"><h2 id="contractTitle">Future Contract</h2><button class="icon-btn" data-close="contractBackdrop" type="button">×</button></div>
+      <div id="contractDetails"></div>
+    </aside>
+  </div>
+
+  <div class="modal-backdrop" id="bobBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bobModalTitle">
+      <div class="modal-head"><h2 id="bobModalTitle">IBM Bob</h2><button class="icon-btn" data-close="bobBackdrop" type="button">×</button></div>
+      <div class="bob-grid" id="bobDetails"></div>
+      <p class="field-help" style="margin-top:16px">Bob is only required when Rescue is needed. Final status is decided by deterministic Roadmap Canary verification.</p>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="contentBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="contentTitle">
+      <div class="modal-head"><h2 id="contentTitle">Evidence</h2><button class="icon-btn" data-close="contentBackdrop" type="button">×</button></div>
+      <pre id="contentBody"></pre>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let repoData = null;
+  let systemData = null;
+  let currentJob = null;
+  let currentSummary = null;
+  let currentEvidenceDir = null;
+  let localMode = false;
+
+  function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, {headers:{"Content-Type":"application/json", ...(options.headers || {})}, ...options});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `Request failed (${response.status})`);
+    return data;
+  }
+
+  function cleanRef(ref) { return String(ref || "").replace(/^origin\//, ""); }
+  function statusClass(status) { if (status === "ROADMAP_RISK") return "risk"; if (status === "STALE") return "stale"; return "safe"; }
+  function statusLabel(status) { return status === "PATH_CHANGED" ? "PATH CHANGED - SAFE" : status || "UNKNOWN"; }
+
+  async function refreshSystem() {
+    try {
+      systemData = await api("/api/system");
+      const bob = systemData.bob || {};
+      $("bobDot").className = `dot ${bob.ready ? "good" : bob.installed ? "warn" : "bad"}`;
+      $("bobText").textContent = bob.ready ? "Ready" : bob.installed ? "Needs API key" : "Unavailable";
+      $("bobDetails").innerHTML = `<div>Shell</div><div>${bob.installed ? "Detected" : "Not found"}</div><div>Version</div><div>${escapeHtml(bob.version || "—")}</div><div>API access</div><div>${bob.api_key_configured ? "Configured" : "Not configured"}</div>`;
+    } catch (_) {
+      $("bobDot").className = "dot bad";
+      $("bobText").textContent = "Unavailable";
+    }
+  }
+
+  function toggleLocalMode() {
+    localMode = !localMode;
+    $("repo").value = "";
+    $("repo").placeholder = localMode ? "/Users/you/projects/roadmap-canary-demo" : "owner/repository";
+    $("toggleLocal").textContent = localMode ? "Use GitHub repository" : "Use local repository";
+    $("repoState").classList.remove("visible");
+    $("analysisFormSection").style.display = "none";
+    $("runsSection").style.display = "none";
+    $("githubDot").className = "dot";
+    $("githubText").textContent = "—";
+    repoData = null;
+    $("inspect").textContent = "Connect repository";
+  }
+
+  function renderContractSummary() {
+    const canary = repoData?.canaries?.find(item => item.path === $("canary").value);
+    if (!canary) { $("contractBox").innerHTML = ""; return; }
+    const b = canary.proof_budget || {};
+    $("contractBox").innerHTML = `<div class="capability-summary"><div class="capability-top"><div><div class="capability-name">${escapeHtml(canary.feature)}</div><div class="meta">Committed · ${escapeHtml(canary.blocking_policy || "advisory")}</div></div><button class="btn link" id="openContract" type="button">View Future Contract</button></div><div class="budget"><strong>Proof budget</strong><br>${escapeHtml(b.max_files_changed)} files · ${escapeHtml(b.max_added_lines)} added lines · ${escapeHtml(b.max_new_dependencies)} dependencies</div></div>`;
+    $("openContract").addEventListener("click", () => showContract(canary));
+  }
+
+  function showContract(canary) {
+    const b = canary.proof_budget || {};
+    const list = (items) => `<ul>${(items || []).map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    $("contractDetails").innerHTML = `<div><strong>${escapeHtml(canary.feature)}</strong><div class="meta">${escapeHtml(canary.id)} · Committed · ${escapeHtml(canary.blocking_policy || "advisory")}</div></div><div class="contract-section"><h3>Must prove</h3>${list(canary.must_prove)}</div><div class="contract-section"><h3>Must not</h3>${list(canary.must_not)}</div><div class="contract-section"><h3>Protected tests</h3>${list(canary.protected_tests)}</div><div class="contract-section"><h3>Proof budget</h3><div class="evidence-row"><span>Files changed</span><span class="value">≤ ${escapeHtml(b.max_files_changed)}</span></div><div class="evidence-row"><span>Added lines</span><span class="value">≤ ${escapeHtml(b.max_added_lines)}</span></div><div class="evidence-row"><span>New dependencies</span><span class="value">${escapeHtml(b.max_new_dependencies)}</span></div></div>`;
+    $("contractBackdrop").classList.add("open");
+  }
+
+  function renderRefs() {
+    const unique = [...new Set(repoData?.refs || [])];
+    $("base").innerHTML = unique.map(ref => `<option value="${escapeHtml(ref)}">${escapeHtml(cleanRef(ref))}</option>`).join("");
+    $("pr").innerHTML = '<option value="">Select a branch</option>' + unique.map(ref => `<option value="${escapeHtml(ref)}">${escapeHtml(cleanRef(ref))}</option>`).join("");
+    const preferredBase = repoData.source === "github" && unique.includes("origin/main") ? "origin/main" : unique.includes("main") ? "main" : unique[0];
+    if (preferredBase) $("base").value = preferredBase;
+    const preferredChange = unique.find(ref => ref.endsWith("demo/path-changed-safe")) || unique.find(ref => ref !== preferredBase && !ref.endsWith("/main"));
+    if (preferredChange) $("pr").value = preferredChange;
+    $("base").disabled = !unique.length;
+    $("pr").disabled = !unique.length;
+  }
+
+  function relativeTime(iso) {
+    if (!iso) return "";
+    const delta = Math.max(0, Date.now() - new Date(iso).getTime());
+    const min = Math.floor(delta / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    return hr < 24 ? `${hr}h ago` : `${Math.floor(hr / 24)}d ago`;
+  }
+
+  function renderRuns() {
+    const runs = repoData?.saved_runs || [];
+    if (!runs.length) { $("runsTable").innerHTML = '<div class="empty">No saved runs yet.</div>'; return; }
+    $("runsTable").innerHTML = `<table class="runs"><thead><tr><th>Capability</th><th>Change</th><th>Result</th><th></th></tr></thead><tbody>${runs.map((run,i) => `<tr data-index="${i}"><td>${escapeHtml(run.feature || "Future capability")}</td><td>${escapeHtml(cleanRef(run.pr_ref))}</td><td><span class="status ${statusClass(run.status)}">${escapeHtml(statusLabel(run.status))}</span></td><td class="muted">${escapeHtml(relativeTime(run.created_at))}</td></tr>`).join("")}</tbody></table>`;
+    $("runsTable").querySelectorAll("tr[data-index]").forEach(row => row.addEventListener("click", () => loadSavedRun(runs[Number(row.dataset.index)])));
+  }
+
+  async function inspectRepo() {
+    $("formError").textContent = "";
+    $("inspect").disabled = true;
+    $("inspect").textContent = repoData ? "Syncing…" : "Connecting…";
+    try {
+      repoData = await api("/api/inspect", {method:"POST", body:JSON.stringify({repo:$("repo").value})});
+      $("repo").value = repoData.repo;
+      $("repoStateText").textContent = `Synced just now · ${repoData.current_branch}`;
+      $("repoState").classList.add("visible");
+      $("githubDot").className = `dot ${repoData.source === "github" ? "good" : ""}`;
+      $("githubText").textContent = repoData.source === "github" ? "Ready" : "Local";
+      $("analysisFormSection").style.display = "block";
+      $("runsSection").style.display = "block";
+      $("bobLimits").open = false;
+
+      const select = $("canary");
+      if (repoData.canaries.length) {
+        select.disabled = false;
+        select.innerHTML = repoData.canaries.map(item => `<option value="${escapeHtml(item.path)}">${escapeHtml(item.feature)}</option>`).join("");
+        $("analyze").disabled = false;
+      } else {
+        select.disabled = true;
+        select.innerHTML = '<option value="">No captured Canary found</option>';
+        $("analyze").disabled = true;
+      }
+      renderContractSummary();
+      renderRefs();
+      renderRuns();
+    } catch (error) {
+      $("formError").textContent = error.message;
+      $("analysisFormSection").style.display = "none";
+      $("runsSection").style.display = "none";
+    } finally {
+      $("inspect").disabled = false;
+      $("inspect").textContent = repoData ? "Sync repository" : "Connect repository";
+    }
+  }
+
+  function renderPipeline(steps) {
+    const text = {pass:"✓ Passed", fail:"✕ Failed", running:"● Running", waiting:"Waiting", skipped:"Skipped"};
+    $("pipeline").innerHTML = (steps || []).map(step => `<div class="step" data-status="${escapeHtml(step.status)}"><div class="step-label">${escapeHtml(step.label)}</div><div class="step-state">${escapeHtml(text[step.status] || step.status)}</div></div>`).join("");
+  }
+
+  function commandLabel(command) {
+    if (command === "npm test") return "Existing tests";
+    if (command === "npm run typecheck") return "Typecheck";
+    if (String(command).includes("vitest") || String(command).includes("canary")) return "Future capability tests";
+    return command;
+  }
+
+  function renderEvidence(summary) {
+    const rescue = summary.rescue || {};
+    const verification = summary.verification || {};
+    const budget = verification.budget || {};
+    const canary = repoData?.canaries?.find(item => item.id === summary.canary_id) || {};
+    const limits = canary.proof_budget || {};
+    let html = "";
+    if (rescue.attempted) {
+      html += '<h2>Verification</h2>';
+      for (const command of verification.commands || []) html += `<div class="evidence-row"><span>${escapeHtml(commandLabel(command.command))}</span><span class="value ${command.passed ? "ok" : "no"}">${command.passed ? "✓ Passed" : "✕ Failed"}</span></div>`;
+      html += `<div class="evidence-row"><span>Protected tests</span><span class="value ${verification.protected_tests_unchanged === false ? "no" : "ok"}">${verification.protected_tests_unchanged === false ? "✕ Changed" : "✓ Unchanged"}</span></div>`;
+    }
+    if (Object.keys(budget).length) {
+      html += '<h2>Proof budget</h2>';
+      const fileBad = verification.budget_passed === false && (verification.budget_violations || []).some(v => String(v).includes("files_changed"));
+      html += `<div class="evidence-row"><span>Files changed</span><span class="value ${fileBad ? "no" : ""}">${escapeHtml(budget.files_changed ?? "—")}${limits.max_files_changed != null ? ` / ${escapeHtml(limits.max_files_changed)}` : ""}</span></div>`;
+      html += `<div class="evidence-row"><span>Added lines</span><span class="value">${escapeHtml(budget.added_lines ?? "—")}${limits.max_added_lines != null ? ` / ${escapeHtml(limits.max_added_lines)}` : ""}</span></div>`;
+      html += `<div class="evidence-row"><span>New dependencies</span><span class="value">${escapeHtml(budget.new_dependencies ?? "—")}${limits.max_new_dependencies != null ? ` / ${escapeHtml(limits.max_new_dependencies)}` : ""}</span></div>`;
+      for (const violation of verification.budget_violations || []) html += `<div class="violation">${escapeHtml(violation)}</div>`;
+    }
+    $("evidence").innerHTML = html;
+  }
+
+  function showResult(summary, evidenceDir, steps = null) {
+    currentSummary = summary; currentEvidenceDir = evidenceDir;
+    $("setupView").style.display = "none"; $("analysisView").style.display = "block";
+    $("analysisTitle").textContent = summary.feature || "Future capability";
+    $("analysisSubtitle").textContent = `${summary.pr_display_ref || cleanRef(summary.pr_ref)} · base ${summary.base_display_ref || cleanRef(summary.base_ref)}`;
+    if (steps) renderPipeline(steps); else renderPipeline([
+      {label:"BASE witness",status:summary.base_passed ? "pass" : "fail"},
+      {label:"PR witness",status:summary.pr_passed ? "pass" : "fail"},
+      {label:"IBM Bob Rescue",status:summary.rescue?.attempted ? summary.rescue?.candidate_produced ? "pass" : "fail" : "skipped"},
+      {label:"Deterministic verification",status:summary.rescue?.attempted ? summary.rescue?.passed ? "pass" : "fail" : "skipped"}
+    ]);
+    $("verdictName").textContent = summary.status_label || statusLabel(summary.status);
+    $("verdictName").className = `verdict-name ${statusClass(summary.status)}`;
+    $("verdictReason").textContent = summary.reason || "";
+    $("phase").textContent = "Analysis complete. Evidence is preserved for review.";
+    $("runState").textContent = "COMPLETE"; $("runState").className = `status ${statusClass(summary.status)}`;
+    renderEvidence(summary);
+    $("resultActions").style.display = "flex";
+    $("viewDiff").style.display = summary.rescue?.candidate_patch ? "inline-flex" : "none";
+  }
+
+  async function loadSavedRun(run) {
+    try {
+      const data = await api("/api/load-result", {method:"POST", body:JSON.stringify({repo:repoData.local_path, result_path:run.path})});
+      showResult(data.summary, data.evidence_dir); window.scrollTo({top:0, behavior:"smooth"});
+    } catch (error) { $("formError").textContent = error.message; }
+  }
+
+  async function analyze() {
+    if (!$("pr").value) { $("formError").textContent = "Choose a change to analyze."; return; }
+    $("formError").textContent = "";
+    $("setupView").style.display = "none"; $("analysisView").style.display = "block";
+    $("analysisTitle").textContent = repoData.canaries.find(item => item.path === $("canary").value)?.feature || "Future capability";
+    $("analysisSubtitle").textContent = `${cleanRef($("pr").value)} · base ${cleanRef($("base").value)}`;
+    $("verdictName").textContent = "ANALYZING"; $("verdictName").className = "verdict-name";
+    $("verdictReason").textContent = "Replaying executable evidence against the selected change.";
+    $("phase").textContent = "Preparing isolated worktrees.";
+    $("runState").textContent = "RUNNING"; $("runState").className = "status muted";
+    $("evidence").innerHTML = ""; $("resultActions").style.display = "none";
+    renderPipeline([{label:"BASE witness",status:"running"},{label:"PR witness",status:"running"},{label:"IBM Bob Rescue",status:"waiting"},{label:"Deterministic verification",status:"waiting"}]);
+    try {
+      const started = await api("/api/runs", {method:"POST", body:JSON.stringify({repo:repoData.local_path, canary:$("canary").value, base:$("base").value, pr:$("pr").value, bob_max_turns:Number($("turns").value), bob_max_cost:Number($("cost").value), bob_timeout:Number($("timeout").value)})});
+      currentJob = started.job_id; pollJob();
+    } catch (error) {
+      $("runState").textContent = "FAILED"; $("runState").className = "status risk";
+      $("verdictName").textContent = "ENGINE ERROR"; $("verdictName").className = "verdict-name risk";
+      $("verdictReason").textContent = error.message;
+    }
+  }
+
+  async function pollJob() {
+    if (!currentJob) return;
+    try {
+      const job = await api(`/api/runs/${currentJob}`);
+      renderPipeline(job.steps); $("phase").textContent = job.phase || "Running";
+      if (job.status === "completed") { currentJob = null; showResult(job.summary, job.evidence_dir, job.steps); return; }
+      if (job.status === "error") {
+        currentJob = null; $("runState").textContent = "FAILED"; $("runState").className = "status risk";
+        $("verdictName").textContent = "ENGINE ERROR"; $("verdictName").className = "verdict-name risk";
+        $("verdictReason").textContent = job.error || "Analysis failed"; return;
+      }
+      setTimeout(pollJob,1100);
+    } catch (_) { setTimeout(pollJob,1800); }
+  }
+
+  function showContent(title, content) { $("contentTitle").textContent = title; $("contentBody").textContent = content || "No content available."; $("contentBackdrop").classList.add("open"); }
+
+  $("toggleLocal").addEventListener("click", toggleLocalMode);
+  $("inspect").addEventListener("click", inspectRepo);
+  $("repo").addEventListener("keydown", e => { if (e.key === "Enter") inspectRepo(); });
+  $("canary").addEventListener("change", renderContractSummary);
+  $("analyze").addEventListener("click", analyze);
+  $("backToSetup").addEventListener("click", () => { $("analysisView").style.display = "none"; $("setupView").style.display = "block"; window.scrollTo({top:0, behavior:"smooth"}); });
+  $("bobStatus").addEventListener("click", () => $("bobBackdrop").classList.add("open"));
+  $("viewDiff").addEventListener("click", () => showContent("Candidate diff", currentSummary?.rescue?.candidate_patch));
+  $("viewEvidence").addEventListener("click", () => showContent("Run evidence", `Evidence directory: ${currentEvidenceDir || "—"}\n\n${JSON.stringify(currentSummary,null,2)}`));
+  document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => $(button.dataset.close).classList.remove("open")));
+  document.querySelectorAll(".drawer-backdrop,.modal-backdrop").forEach(backdrop => backdrop.addEventListener("click", e => { if (e.target === backdrop) backdrop.classList.remove("open"); }));
+  window.addEventListener("pageshow", () => { $("bobLimits").open = false; });
+
+  refreshSystem();
+</script>
+</body>
+</html>
