@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 from roadmap_canary.evaluation import check_canary
 from roadmap_canary.models import CanaryStatus
 from roadmap_canary.rescue import PatchRescueAgent
+from roadmap_canary.runs import persist_run
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -92,6 +94,16 @@ new file mode 100644
     assert result.status == CanaryStatus.PATH_CHANGED
     assert result.rescue is not None
     assert result.rescue.passed
+    assert result.rescue.candidate_patch is not None
+    assert "alternate.txt" in result.rescue.candidate_patch
+
+    output = persist_run(result, tmp_path / "run")
+    persisted = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert persisted["status"] == "PATH_CHANGED"
+    assert (output / "replacement-witness.patch").is_file()
+    assert "alternate.txt" in (output / "replacement-witness.patch").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_failed_rescue_is_roadmap_risk(tmp_path: Path) -> None:
