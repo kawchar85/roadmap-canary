@@ -1,6 +1,6 @@
 # IBM Bob Integration
 
-This document records behavior that has been experimentally verified for the Roadmap Canary hackathon integration.
+This document records behavior that has been experimentally verified for the Roadmap Canary hackathon integration and the constraints applied by the current adapter.
 
 ## Verified environment
 
@@ -78,7 +78,7 @@ Roadmap Canary therefore normalizes all candidate changes before preserving or m
 
 ## Integration boundary
 
-The intended runtime path is:
+The runtime path is:
 
 ```text
 Roadmap Canary
@@ -87,7 +87,7 @@ Roadmap Canary
 isolated Git worktree at PR state
     |
     v
-bob run --workspace <worktree> --mode agent --format json
+bounded IBM Bob Rescue
     |
     v
 Bob edits candidate code
@@ -110,12 +110,47 @@ Bob does not decide the final Roadmap Canary status.
 `BobRescueAgent`:
 
 - builds a Rescue prompt from the human-approved Future Contract and known witness failure evidence,
-- invokes Bob Shell against the isolated Rescue worktree,
+- invokes Bob Shell against a temporary isolated Rescue worktree,
 - uses `agent` mode,
 - requests JSON output,
-- bounds the attempt by `max_turns` and a wall-clock timeout,
-- parses Bob task metadata,
+- bounds the search by `--max-turns`, `--max-cost`, and a Roadmap Canary wall-clock timeout,
+- disables MCP by default during Rescue,
+- disables subagents by default during Rescue,
+- parses Bob task ID, duration, session cost, tool-call count, and final message,
 - checks whether Bob actually left workspace changes,
 - returns only a candidate proposal to the engine.
 
-The normal verifier then independently checks tests, protected-test integrity, proof budget, and other contract evidence.
+A representative generated command is:
+
+```bash
+bob run \
+  --workspace <rescue-worktree> \
+  --mode agent \
+  --format json \
+  --max-turns 8 \
+  --max-cost 0.50 \
+  --disable-mcp \
+  --disable-subagents \
+  "<Roadmap Canary Rescue prompt>"
+```
+
+The exact budget is configurable from the Roadmap Canary CLI.
+
+## Trust and safety boundary
+
+Non-interactive Bob is deliberately treated as an untrusted proposal engine, not as the verifier.
+
+The trusted boundary is:
+
+1. Roadmap Canary creates a disposable Git worktree from the PR state.
+2. Bob edits only that workspace.
+3. Roadmap Canary normalizes and measures the resulting diff.
+4. The deterministic verifier independently runs approved commands, checks protected tests, and enforces the proof budget.
+5. A successful candidate is stored in run evidence but does not automatically replace the trusted Canary witness.
+6. Human-triggered `roadmap-canary promote` re-verifies the persisted candidate from scratch before updating the witness.
+
+This separation is central to the design: **Bob proposes. Roadmap Canary verifies.**
+
+## Failure semantics
+
+A Bob timeout, budget stop, error, no-change completion, or candidate verification failure does not prove the future capability impossible. It means no replacement proof was deterministically verified within that configured Rescue attempt.
