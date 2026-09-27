@@ -8,6 +8,8 @@ Traditional CI tells you whether today's software still works. Roadmap Canary as
 
 A refactor can keep every current test green while quietly making a planned feature much harder to build. Roadmap Canary makes that kind of regression visible.
 
+![Roadmap Canary analysis pipeline](docs/assets/roadmap-canary-pipeline.gif)
+
 ## How it works
 
 For each future capability the team wants to protect, Roadmap Canary keeps two things:
@@ -16,30 +18,6 @@ For each future capability the team wants to protect, Roadmap Canary keeps two t
 - a **verified witness**, which is a small disposable executable proof that the capability is achievable from the current architecture
 
 The witness is not the future product implementation and is not intended to be merged into production. It only establishes a known-good path that future changes can be tested against.
-
-```text
-committed future capability
-          |
-          v
-human-approved Future Contract
-          +
-verified disposable witness
-          |
-          v
-BASE replay -------- PR replay
-                       |
-                  witness fails
-                       |
-                 bounded Rescue
-                       |
-                    IBM Bob
-                       |
-                candidate proof
-                       |
-          deterministic verification
-                 /             \
-     PATH CHANGED - SAFE    ROADMAP RISK
-```
 
 The central trust boundary is:
 
