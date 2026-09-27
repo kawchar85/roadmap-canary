@@ -8,6 +8,10 @@ Traditional CI tells you whether today's software still works. Roadmap Canary as
 
 A refactor can keep every current test green while quietly making a planned feature much harder to build. Roadmap Canary makes that kind of regression visible.
 
+<p align="center">
+  <img src="docs/assets/roadmap-canary-pipeline.gif" alt="Roadmap Canary decision pipeline" width="900" />
+</p>
+
 ## How it works
 
 For each future capability the team wants to protect, Roadmap Canary keeps two things:
