@@ -6,6 +6,8 @@ from pathlib import Path
 from roadmap_canary.evaluation import check_canary, check_known_path, classify_known_path
 from roadmap_canary.models import CanaryStatus, ReplayResult
 
+from conftest import write_canary_metadata
+
 
 def _result(tmp_path: Path, passed: bool) -> ReplayResult:
     return ReplayResult(
@@ -126,6 +128,7 @@ new file mode 100644
 """,
         encoding="utf-8",
     )
+    write_canary_metadata(canary, baseline_commit=base_sha)
 
     result = check_known_path(
         repo,

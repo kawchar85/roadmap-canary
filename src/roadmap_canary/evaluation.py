@@ -94,6 +94,9 @@ def classify_known_path(
             ),
         )
 
+    # BASE FAIL + CHANGE PASS: the stored Canary is no longer a valid known-good
+    # baseline.  We cannot attribute the change because the proof did not hold on
+    # BASE.  Mark STALE rather than inferring that the PR "fixed" anything.
     return KnownPathCheck(
         canary_id=canary_id,
         feature=feature,
@@ -101,11 +104,11 @@ def classify_known_path(
         pr_ref=pr_ref,
         base=base,
         pr=pr,
-        status=CanaryStatus.SAFE,
+        status=CanaryStatus.STALE,
         rescue_required=False,
         reason=(
-            "The witness fails on BASE but verifies on the PR. "
-            "The PR restores this demonstrated path; no roadmap regression is indicated."
+            "The witness already fails on BASE, so the current PR cannot be blamed. "
+            "The canary needs refresh or investigation."
         ),
     )
 

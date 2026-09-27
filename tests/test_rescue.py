@@ -9,6 +9,8 @@ from roadmap_canary.models import CanaryStatus
 from roadmap_canary.rescue import PatchRescueAgent
 from roadmap_canary.runs import persist_run
 
+from conftest import write_canary_metadata
+
 
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(
@@ -66,6 +68,7 @@ new file mode 100644
 """,
         encoding="utf-8",
     )
+    write_canary_metadata(canary, baseline_commit=base_sha)
     return repo, canary, base_sha, pr_sha
 
 

@@ -86,9 +86,7 @@ def promote_verified_rescue(
             "Persisted replacement witness no longer verifies on the PR state: " + details
         )
 
-    previous_metadata = (
-        artifact.metadata.model_dump(mode="json") if artifact.metadata is not None else None
-    )
+    previous_metadata = artifact.metadata.model_dump(mode="json")
     previous_witness_hash = artifact.witness_digest
 
     witness_path = canary_path / "witness.patch"
