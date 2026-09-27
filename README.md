@@ -79,7 +79,11 @@ IBM Bob is invoked only when the known witness passes on BASE but no longer work
 
 ## Demo
 
-Use the prepared demo repository:
+Explore the verified Roadmap Canary demo in your browser:
+
+**[Open the public demo](https://kawchar85.github.io/roadmap-canary-demo/)**
+
+The public demo replays saved, verified analyses from the [`roadmap-canary-demo`](https://github.com/kawchar85/roadmap-canary-demo) repository, so the complete workflow can be explored without IBM Bob credentials.
 
 ```text
 Repository:        kawchar85/roadmap-canary-demo
@@ -99,8 +103,8 @@ Expected flow:
 
 ```text
 BASE witness                 PASS
-PR witness                   FAIL
-IBM Bob Rescue               PASS
+Change witness               KNOWN PATH BROKEN
+IBM Bob Rescue               candidate produced
 Deterministic verification   PASS
 Result                       PATH CHANGED - SAFE
 ```
@@ -117,13 +121,15 @@ Expected flow:
 
 ```text
 BASE witness                 PASS
-PR witness                   FAIL
+Change witness               KNOWN PATH BROKEN
 IBM Bob Rescue               candidate produced
-Deterministic verification   FAIL
+Deterministic verification   REJECTED
 Result                       ROADMAP RISK
 ```
 
-The candidate can satisfy the functional checks but exceeds the approved proof budget, demonstrating that today's software can remain green while a committed future capability becomes materially more expensive to preserve.
+The Rescue candidate can satisfy the functional checks, but exceeds the approved proof budget. This demonstrates how today's software can remain green while a committed future capability becomes materially more expensive to preserve.
+
+To run Roadmap Canary against your own repository with live IBM Bob Rescue, follow the [Quick start](#quick-start) instructions above.
 
 ## Result semantics
 
