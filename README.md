@@ -23,7 +23,7 @@ The central trust boundary is:
 
 > **Bob proposes. Roadmap Canary verifies.**
 
-IBM Bob may search for a replacement path when the known witness stops working, but Bob never decides the final result. Roadmap Canary independently checks the candidate using the approved verification commands, protected-test integrity, and proof budget.
+IBM Bob may search for a replacement path when the known witness stops working, but Bob never decides the final result. Roadmap Canary independently checks the candidate using the approved verification commands, BASE-anchored protected verifier inputs, and proof budget.
 
 ## Establishing a future capability
 
@@ -63,7 +63,7 @@ The resulting Canary artifact contains the approved contract and executable evid
 To enable IBM Bob Rescue, set an IBM Bob API key in your environment. Keep API keys out of source control.
 
 ```bash
-git clone git@github.com:kawchar85/roadmap-canary.git
+git clone https://github.com/kawchar85/roadmap-canary.git
 cd roadmap-canary
 
 pip install -e '.[dev]'
