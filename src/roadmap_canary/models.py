@@ -131,6 +131,13 @@ class KnownPathCheck(StrictModel):
     status: CanaryStatus | None = None
     rescue_required: bool
     reason: str
+    # In-memory trust anchor captured from BASE before witness replay. It is
+    # intentionally excluded from persisted result JSON because hashes of
+    # verifier inputs are internal verification state, not user-facing evidence.
+    base_protected_snapshot: dict[str, str | None] = Field(
+        default_factory=dict,
+        exclude=True,
+    )
 
 
 class RescueRun(StrictModel):

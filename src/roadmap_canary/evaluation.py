@@ -46,68 +46,59 @@ def classify_known_path(
     pr_ref: str,
     base: ReplayResult,
     pr: ReplayResult,
+    base_protected_snapshot: dict[str, str | None] | None = None,
 ) -> KnownPathCheck:
-    """Classify BASE/PR witness replay before any Rescue attempt."""
+    """Classify BASE/Change witness replay before any Rescue attempt."""
+
+    common = {
+        "canary_id": canary_id,
+        "feature": feature,
+        "base_ref": base_ref,
+        "pr_ref": pr_ref,
+        "base": base,
+        "pr": pr,
+        "base_protected_snapshot": base_protected_snapshot or {},
+    }
 
     if base.passed and pr.passed:
         return KnownPathCheck(
-            canary_id=canary_id,
-            feature=feature,
-            base_ref=base_ref,
-            pr_ref=pr_ref,
-            base=base,
-            pr=pr,
+            **common,
             status=CanaryStatus.SAFE,
             rescue_required=False,
-            reason="The previously demonstrated viability witness still verifies on the PR.",
+            reason="The previously demonstrated viability witness still verifies on the Change.",
         )
 
     if base.passed and not pr.passed:
         return KnownPathCheck(
-            canary_id=canary_id,
-            feature=feature,
-            base_ref=base_ref,
-            pr_ref=pr_ref,
-            base=base,
-            pr=pr,
+            **common,
             status=None,
             rescue_required=True,
             reason=(
-                "The known witness verifies on BASE but not on the PR. "
+                "The known witness verifies on BASE but not on the Change. "
                 "Rescue is required before a roadmap verdict can be produced."
             ),
         )
 
     if not base.passed and not pr.passed:
         return KnownPathCheck(
-            canary_id=canary_id,
-            feature=feature,
-            base_ref=base_ref,
-            pr_ref=pr_ref,
-            base=base,
-            pr=pr,
+            **common,
             status=CanaryStatus.STALE,
             rescue_required=False,
             reason=(
-                "The witness already fails on BASE, so the current PR cannot be blamed. "
+                "The witness already fails on BASE, so the current Change cannot be blamed. "
                 "The canary needs refresh or investigation."
             ),
         )
 
     # BASE FAIL + CHANGE PASS: the stored Canary is no longer a valid known-good
-    # baseline.  We cannot attribute the change because the proof did not hold on
-    # BASE.  Mark STALE rather than inferring that the PR "fixed" anything.
+    # baseline. We cannot attribute the Change because the proof did not hold on
+    # BASE. Mark STALE rather than inferring that the Change "fixed" anything.
     return KnownPathCheck(
-        canary_id=canary_id,
-        feature=feature,
-        base_ref=base_ref,
-        pr_ref=pr_ref,
-        base=base,
-        pr=pr,
+        **common,
         status=CanaryStatus.STALE,
         rescue_required=False,
         reason=(
-            "The witness already fails on BASE, so the current PR cannot be blamed. "
+            "The witness already fails on BASE, so the current Change cannot be blamed. "
             "The canary needs refresh or investigation."
         ),
     )
@@ -120,6 +111,7 @@ def _replay_ref(
     artifact: CanaryArtifact,
     *,
     timeout_seconds: int,
+    protected_snapshot: dict[str, str | None],
 ) -> ReplayResult:
     create_worktree(repo, ref, destination)
     try:
@@ -128,7 +120,23 @@ def _replay_ref(
             artifact.witness_path,
             artifact.contract,
             timeout_seconds=timeout_seconds,
+            protected_snapshot=protected_snapshot,
         )
+    finally:
+        remove_worktree(repo, destination)
+
+
+def _capture_base_snapshot(
+    repo: Path,
+    base_ref: str,
+    destination: Path,
+    artifact: CanaryArtifact,
+) -> dict[str, str | None]:
+    """Capture trusted verifier-input hashes from BASE before witness replay."""
+
+    create_worktree(repo, base_ref, destination)
+    try:
+        return snapshot_protected_files(destination, artifact.contract)
     finally:
         remove_worktree(repo, destination)
 
@@ -141,26 +149,39 @@ def check_known_path(
     pr_ref: str,
     timeout_seconds: int = 300,
 ) -> KnownPathCheck:
-    """Replay one stored witness against BASE and PR in isolated worktrees."""
+    """Replay one stored witness against BASE and Change in isolated worktrees.
+
+    Protected verifier inputs are anchored once from BASE and reused for both
+    replays. A Change therefore cannot redefine what verification means before
+    Roadmap Canary takes its snapshot.
+    """
 
     repo_path = Path(repo).resolve()
     artifact = load_canary_artifact(canary)
 
     with TemporaryDirectory(prefix="roadmap-canary-") as temporary:
         root = Path(temporary)
+        base_snapshot = _capture_base_snapshot(
+            repo_path,
+            base_ref,
+            root / "base-anchor",
+            artifact,
+        )
         base_result = _replay_ref(
             repo_path,
             base_ref,
             root / "base",
             artifact,
             timeout_seconds=timeout_seconds,
+            protected_snapshot=base_snapshot,
         )
         pr_result = _replay_ref(
             repo_path,
             pr_ref,
-            root / "pr",
+            root / "change",
             artifact,
             timeout_seconds=timeout_seconds,
+            protected_snapshot=base_snapshot,
         )
 
     stale_reason = lifecycle_stale_reason(artifact.contract)
@@ -174,7 +195,8 @@ def check_known_path(
             pr=pr_result,
             status=CanaryStatus.STALE,
             rescue_required=False,
-            reason=stale_reason + " The Canary must be reviewed or renewed before PR attribution.",
+            reason=stale_reason + " The Canary must be reviewed or renewed before Change attribution.",
+            base_protected_snapshot=base_snapshot,
         )
 
     return classify_known_path(
@@ -184,6 +206,7 @@ def check_known_path(
         pr_ref=pr_ref,
         base=base_result,
         pr=pr_result,
+        base_protected_snapshot=base_snapshot,
     )
 
 
@@ -221,9 +244,9 @@ def check_canary(
 ) -> CanaryCheck:
     """Run known-path replay and, when required, one bounded Rescue attempt.
 
-    ``known_path`` may be supplied by callers that already replayed BASE and PR,
-    such as the web UI. This avoids repeating the same deterministic work before
-    Rescue while preserving the original behavior for CLI and other callers.
+    ``known_path`` may be supplied by callers that already replayed BASE and
+    Change, such as the web UI. The BASE verifier-input snapshot is carried in
+    memory and reused for Rescue so the agent cannot redefine the trust anchor.
     """
 
     if known_path is None:
@@ -235,7 +258,7 @@ def check_canary(
             timeout_seconds=timeout_seconds,
         )
     elif known_path.base_ref != base_ref or known_path.pr_ref != pr_ref:
-        raise ValueError("known_path refs do not match the requested BASE/PR refs")
+        raise ValueError("known_path refs do not match the requested BASE/Change refs")
 
     if not known_path.rescue_required:
         status = known_path.status or CanaryStatus.SAFE
@@ -251,13 +274,23 @@ def check_canary(
         raise ValueError("known_path does not belong to the selected Canary")
 
     with TemporaryDirectory(prefix="roadmap-canary-rescue-") as temporary:
-        rescue_workspace = Path(temporary) / "rescue"
+        root = Path(temporary)
+        protected_snapshot = known_path.base_protected_snapshot
+        if not protected_snapshot and (
+            artifact.contract.protected_tests or artifact.contract.protected_files
+        ):
+            # A caller may construct/reload KnownPathCheck without the excluded
+            # in-memory field. Rebuild the trust anchor from BASE, never Change.
+            protected_snapshot = _capture_base_snapshot(
+                repo_path,
+                base_ref,
+                root / "base-anchor",
+                artifact,
+            )
+
+        rescue_workspace = root / "rescue"
         create_worktree(repo_path, pr_ref, rescue_workspace)
         try:
-            protected_snapshot = snapshot_protected_files(
-                rescue_workspace,
-                artifact.contract,
-            )
             agent_run = rescue_agent.rescue(
                 rescue_workspace,
                 artifact.contract,
