@@ -1,0 +1,54 @@
+name: Hardening Capture
+
+on:
+  push:
+    branches: [hardening/task4-5]
+
+jobs:
+  capture-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Roadmap Canary
+        run: pip install -e '.[dev]'
+      - name: Clone final demo baseline and refs
+        run: |
+          git clone https://github.com/kawchar85/roadmap-canary-demo.git demo
+          cd demo
+          git fetch origin canary/multi-provider-witness-final:refs/remotes/origin/canary/multi-provider-witness-final
+          git fetch origin demo/path-changed-safe:refs/remotes/origin/demo/path-changed-safe
+          git fetch origin demo/roadmap-risk:refs/remotes/origin/demo/roadmap-risk
+      - name: Capture final Canary
+        run: |
+          cd demo
+          roadmap-canary capture \
+            --repo . \
+            --contract .roadmap-canary/issue-1/contract.yaml \
+            --base main \
+            --witness origin/canary/multi-provider-witness-final \
+            --output /tmp/canary-final
+      - name: Validate known-path scenarios
+        run: |
+          cd demo
+          set +e
+          roadmap-canary check-known-path --repo . --canary /tmp/canary-final --base main --pr origin/demo/path-changed-safe
+          SAFE_CODE=$?
+          roadmap-canary check-known-path --repo . --canary /tmp/canary-final --base main --pr origin/demo/roadmap-risk
+          RISK_CODE=$?
+          set -e
+          test "$SAFE_CODE" -eq 2
+          test "$RISK_CODE" -eq 2
+      - name: Emit captured artifact
+        run: |
+          echo '---METADATA_JSON---'
+          cat /tmp/canary-final/metadata.json
+          echo '---EVIDENCE_JSON---'
+          cat /tmp/canary-final/evidence.json
+          echo '---WITNESS_PATCH---'
+          cat /tmp/canary-final/witness.patch
