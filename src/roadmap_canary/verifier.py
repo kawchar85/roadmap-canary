@@ -196,17 +196,13 @@ def count_new_npm_dependencies(workspace: str | Path) -> int:
     return len(_npm_dependency_names(current) - _npm_dependency_names(baseline))
 
 
-def _is_runtime_support_path(workspace: Path, relative_path: str) -> bool:
-    """Return True for synthetic worktree-only paths created by Roadmap Canary."""
-
-    if relative_path != "node_modules":
-        return False
-    path = workspace / relative_path
-    return path.is_symlink()
-
-
 def measure_diff(workspace: str | Path) -> DiffStats:
-    """Measure candidate changes relative to HEAD, excluding runtime support paths."""
+    """Measure candidate changes relative to HEAD.
+
+    ``node_modules`` is excluded from all accounting via normal ``.gitignore``
+    semantics. No synthetic symlink exists in isolated worktrees, so no
+    special runtime-path filtering is needed here.
+    """
 
     workspace_path = Path(workspace).resolve()
 
@@ -222,8 +218,6 @@ def measure_diff(workspace: str | Path) -> DiffStats:
         if len(parts) != 3:
             continue
         added, removed, path = parts
-        if _is_runtime_support_path(workspace_path, path):
-            continue
         diff_paths.add(path)
         if added.isdigit():
             added_lines += int(added)
@@ -243,8 +237,6 @@ def measure_diff(workspace: str | Path) -> DiffStats:
         path = line[3:]
         if " -> " in path:
             path = path.split(" -> ", 1)[1]
-        if _is_runtime_support_path(workspace_path, path):
-            continue
         changed_paths.add(path)
         if state == "??":
             untracked_paths.append(path)

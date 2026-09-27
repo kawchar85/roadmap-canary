@@ -231,9 +231,8 @@ When finished, respond briefly with what you changed and which verification comm
 
     @staticmethod
     def _workspace_has_changes(workspace: Path) -> tuple[bool, str | None]:
-        # ``node_modules`` can be a synthetic symlink created by Roadmap Canary
-        # so isolated JS/TS worktrees can reuse dependencies installed in the
-        # target repository. It is runtime infrastructure, never a Bob proposal.
+        # ``node_modules`` is listed in .gitignore and excluded from Git status
+        # by normal ignore semantics. No special exclusion is needed here.
         status = subprocess.run(
             [
                 "git",
@@ -243,7 +242,6 @@ When finished, respond briefly with what you changed and which verification comm
                 "--porcelain",
                 "--",
                 ".",
-                ":(exclude)node_modules",
             ],
             text=True,
             capture_output=True,
