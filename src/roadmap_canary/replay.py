@@ -5,9 +5,11 @@ from pathlib import Path
 
 from .models import FutureContract, ReplayResult
 from .verifier import (
+    changed_protected_files,
     changed_protected_tests,
     evaluate_proof_budget,
     run_verification_commands,
+    snapshot_protected_files,
     snapshot_protected_tests,
 )
 
@@ -66,7 +68,14 @@ def verify_candidate_workspace(
         and all(result.passed for result in command_results)
     )
 
-    changed_tests = changed_protected_tests(workspace_path, protected_snapshot)
+    # Split the snapshot into the legacy protected_tests subset and the new
+    # protected_files subset so each field in ReplayResult can be reported
+    # independently. Both come from the unified snapshot passed in.
+    changed_tests = changed_protected_tests(
+        workspace_path,
+        {k: v for k, v in protected_snapshot.items() if k in contract.protected_tests},
+    )
+    changed_files = changed_protected_files(workspace_path, protected_snapshot)
     budget = evaluate_proof_budget(workspace_path, contract)
 
     errors: list[str] = []
@@ -75,6 +84,10 @@ def verify_candidate_workspace(
     if changed_tests:
         errors.append(
             "Protected tests were modified: " + ", ".join(sorted(changed_tests))
+        )
+    if changed_files:
+        errors.append(
+            "Protected files were modified: " + ", ".join(sorted(changed_files))
         )
     errors.extend(budget.violations)
 
@@ -85,6 +98,8 @@ def verify_candidate_workspace(
         commands=command_results,
         protected_tests_unchanged=not changed_tests,
         changed_protected_tests=sorted(changed_tests),
+        protected_files_unchanged=not changed_files,
+        changed_protected_files=sorted(changed_files),
         budget=budget,
         errors=errors,
     )
@@ -99,7 +114,7 @@ def replay_witness(
 ) -> ReplayResult:
     workspace_path = Path(workspace).resolve()
     witness_path = Path(witness_patch).resolve()
-    protected_snapshot = snapshot_protected_tests(workspace_path, contract)
+    protected_snapshot = snapshot_protected_files(workspace_path, contract)
 
     applied, error = _apply_patch(workspace_path, witness_path)
     if not applied:

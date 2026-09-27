@@ -66,6 +66,7 @@ class FutureContract(StrictModel):
     must_not: list[str] = Field(default_factory=list)
     protected_surfaces: ProtectedSurfaces = Field(default_factory=ProtectedSurfaces)
     protected_tests: list[str] = Field(default_factory=list)
+    protected_files: list[str] = Field(default_factory=list)
     verification: VerificationConfig
     proof_budget: ProofBudget
 
@@ -103,6 +104,8 @@ class ReplayResult(StrictModel):
     commands: list[CommandResult] = Field(default_factory=list)
     protected_tests_unchanged: bool = True
     changed_protected_tests: list[str] = Field(default_factory=list)
+    protected_files_unchanged: bool = True
+    changed_protected_files: list[str] = Field(default_factory=list)
     budget: BudgetResult | None = None
     errors: list[str] = Field(default_factory=list)
 
@@ -113,6 +116,7 @@ class ReplayResult(StrictModel):
             self.patch_applied
             and self.verification_passed
             and self.protected_tests_unchanged
+            and self.protected_files_unchanged
             and budget_passed
         )
 

@@ -76,7 +76,12 @@ def snapshot_protected_tests(
     workspace: str | Path,
     contract: FutureContract,
 ) -> dict[str, str | None]:
-    """Record protected-test hashes before speculative code is applied."""
+    """Record protected-test hashes before speculative code is applied.
+
+    Kept for backward compatibility. Use snapshot_protected_files for the
+    general protected-file mechanism that also covers vitest configs, package
+    manifests, and other trusted verifier inputs.
+    """
 
     workspace_path = Path(workspace).resolve()
     snapshot: dict[str, str | None] = {}
@@ -90,6 +95,49 @@ def changed_protected_tests(
     workspace: str | Path,
     snapshot: dict[str, str | None],
 ) -> list[str]:
+    """Return protected-test paths whose content changed after the snapshot.
+
+    Kept for backward compatibility alongside changed_protected_files.
+    """
+    workspace_path = Path(workspace).resolve()
+    changed: list[str] = []
+    for relative_path, before in snapshot.items():
+        path = _workspace_file(workspace_path, relative_path)
+        after = _sha256(path) if path.is_file() else None
+        if before != after:
+            changed.append(relative_path)
+    return changed
+
+
+def snapshot_protected_files(
+    workspace: str | Path,
+    contract: FutureContract,
+) -> dict[str, str | None]:
+    """Record hashes for all protected files (protected_files + protected_tests).
+
+    protected_files covers the full set of trusted verifier inputs: test files,
+    test-runner configs, package manifests, and tsconfig. protected_tests is
+    kept for backward compatibility; both lists are merged here so a single
+    snapshot call protects everything declared in the contract.
+    """
+
+    workspace_path = Path(workspace).resolve()
+    snapshot: dict[str, str | None] = {}
+    all_paths = list(contract.protected_tests) + list(contract.protected_files)
+    for relative_path in all_paths:
+        if relative_path in snapshot:
+            continue
+        path = _workspace_file(workspace_path, relative_path)
+        snapshot[relative_path] = _sha256(path) if path.is_file() else None
+    return snapshot
+
+
+def changed_protected_files(
+    workspace: str | Path,
+    snapshot: dict[str, str | None],
+) -> list[str]:
+    """Return all protected paths (from snapshot) whose content changed."""
+
     workspace_path = Path(workspace).resolve()
     changed: list[str] = []
     for relative_path, before in snapshot.items():

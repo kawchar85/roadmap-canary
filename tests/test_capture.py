@@ -47,7 +47,7 @@ must_prove:
   - witness.txt demonstrates the future path
 verification:
   commands:
-    - python -c "from pathlib import Path; assert Path('witness.txt').read_text().strip() == '{expected}'"
+    - python3 -c "from pathlib import Path; assert Path('witness.txt').read_text().strip() == '{expected}'"
 proof_budget:
   max_files_changed: 2
   max_added_lines: 5

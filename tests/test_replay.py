@@ -40,7 +40,7 @@ def _contract(**overrides: object) -> FutureContract:
         "protected_tests": ["tests/acceptance.txt"],
         "verification": {
             "commands": [
-                "python -c \"from pathlib import Path; assert Path('feature.txt').read_text() == 'witness\\n'\""
+                "python3 -c \"from pathlib import Path; assert Path('feature.txt').read_text() == 'witness\\n'\""
             ]
         },
         "proof_budget": {
@@ -93,7 +93,7 @@ def test_replay_rejects_protected_test_modification(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     contract = _contract(
-        verification={"commands": ["python -c \"print('ok')\""]}
+        verification={"commands": ["python3 -c \"print('ok')\""]}
     )
 
     result = replay_witness(repo, patch, contract)

@@ -15,7 +15,7 @@ from .models import (
 )
 from .replay import replay_witness, verify_candidate_workspace
 from .rescue import RescueAgent
-from .verifier import snapshot_protected_tests
+from .verifier import snapshot_protected_files
 from .worktree import (
     create_worktree,
     git_diff,
@@ -251,7 +251,7 @@ def check_canary(
         rescue_workspace = Path(temporary) / "rescue"
         create_worktree(repo_path, pr_ref, rescue_workspace)
         try:
-            protected_snapshot = snapshot_protected_tests(
+            protected_snapshot = snapshot_protected_files(
                 rescue_workspace,
                 artifact.contract,
             )

@@ -48,7 +48,7 @@ must_prove:
   - either the original or an alternate executable path exists
 verification:
   commands:
-    - python -c "from pathlib import Path; f=Path('feature.txt'); a=Path('alternate.txt'); assert (f.exists() and f.read_text() == 'witness\\n') or (a.exists() and a.read_text() == 'alternate\\n')"
+    - python3 -c "from pathlib import Path; f=Path('feature.txt'); a=Path('alternate.txt'); assert (f.exists() and f.read_text() == 'witness\\n') or (a.exists() and a.read_text() == 'alternate\\n')"
 proof_budget:
   max_files_changed: 2
   max_added_lines: 5

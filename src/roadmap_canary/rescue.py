@@ -128,9 +128,8 @@ class BobRescueAgent:
         contract: FutureContract,
         failure: ReplayResult,
     ) -> str:
-        protected_tests = "\n".join(
-            f"- {path}" for path in contract.protected_tests
-        ) or "- none configured"
+        all_protected = list(contract.protected_tests) + list(contract.protected_files)
+        protected_listing = "\n".join(f"- {path}" for path in all_protected) or "- none configured"
         verification_commands = "\n".join(
             f"- {command}" for command in contract.verification.commands
         )
@@ -155,9 +154,10 @@ REQUIRED WORKING RULES
 - Produce the smallest credible executable proof satisfying the contract.
 - Use real production paths required by the contract; do not bypass them with isolated fake logic.
 - Preserve existing behavior.
-- Inspect the protected tests and any dedicated Canary verifier to understand the required executable evidence, but do not modify them.
+- Inspect the protected files and any dedicated Canary verifier to understand the required executable evidence, but do not modify them.
 - Create any disposable proof wiring/support files needed by that verifier, as long as they stay within the proof budget and do not weaken production code or tests.
 - Do not weaken, delete, or rewrite approved acceptance/contract tests merely to make the proof pass.
+- Do not modify test-runner configuration files, package manifests, tsconfig, or any other file listed under protected_files.
 - Do not replace production components with mocks unless the Future Contract explicitly allows it.
 - Do not make unrelated refactors.
 - Stay within the Future Contract proof budget.
@@ -168,8 +168,8 @@ REQUIRED WORKING RULES
 - If the capability can be demonstrated, leave the complete candidate implementation in the workspace for external verification.
 - If you cannot produce a credible candidate within the constraints, do not create unrelated placeholder changes.
 
-PROTECTED TESTS
-{protected_tests}
+PROTECTED FILES (do not modify any of these)
+{protected_listing}
 
 VERIFICATION COMMANDS
 {verification_commands}

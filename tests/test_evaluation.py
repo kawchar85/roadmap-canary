@@ -108,7 +108,7 @@ must_prove:
   - witness can add feature.txt
 verification:
   commands:
-    - python -c "from pathlib import Path; assert Path('feature.txt').read_text() == 'witness\\n'"
+    - python3 -c "from pathlib import Path; assert Path('feature.txt').read_text() == 'witness\\n'"
 proof_budget:
   max_files_changed: 2
   max_added_lines: 5

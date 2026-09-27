@@ -40,6 +40,16 @@ protected_tests:
   - tests/refund.integration.test.ts
   - canary-tests/multi-provider.test.ts
 
+protected_files:
+  - tests/checkout.integration.test.ts
+  - tests/refund.integration.test.ts
+  - tests/payment-provider.contract.test.ts
+  - canary-tests/multi-provider.test.ts
+  - vitest.config.ts
+  - vitest.canary.config.ts
+  - package.json
+  - tsconfig.json
+
 verification:
   commands:
     - npm install --ignore-scripts --no-audit --no-fund --no-package-lock
